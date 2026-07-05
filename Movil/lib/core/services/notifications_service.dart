@@ -32,8 +32,8 @@ class NotificationsService {
   Future<int> getUnreadCount() async {
     final response = await _apiClient.get('/notifications/unread/count');
     if (response.statusCode == 200) {
-      final count = jsonDecode(response.body) as int? ?? 0;
-      return count;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['count'] as int? ?? 0;
     } else {
       final error = jsonDecode(response.body);
       throw Exception(error['message'] ?? 'Error al obtener conteo de no leídas');
