@@ -30,7 +30,7 @@ import { UbicacionModule } from './ubicacion/ubicacion.module';
         const options: any = {
           type: 'postgres',
           entities: [User, Tutor, Hijo, Notification, ZonaSegura, Registro],
-          synchronize: !isProd, // Desactivado en producción por seguridad
+          synchronize: true, // Habilitado temporalmente para inicializar tablas en producción
           logging: !isProd,
           ssl: isProd || configService.get('DB_SSL') === 'true'
             ? { rejectUnauthorized: false } // Requerido por Render Postgres
