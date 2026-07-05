@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/constants/app_constants.dart';
-import '../hijo/status_screen.dart'; // Pantalla home del hijo una vez conectado
+import '../hijo/dashboard_screen.dart'; // Pantalla home/dashboard del hijo
 
 class VincularScreen extends StatefulWidget {
   const VincularScreen({super.key});
@@ -14,20 +14,11 @@ class VincularScreen extends StatefulWidget {
 class _VincularScreenState extends State<VincularScreen> {
   final _authService = AuthService();
   final _codeController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
 
-  int _step = 1; // Paso 1: ingresar código, Paso 2: ingresar credenciales
   bool _isLoading = false;
   String _errorMessage = '';
-  
-  // Datos devueltos por el código verificado
-  String _hijoNombre = '';
-  String _hijoApellido = '';
 
-  // Paso 1: Verificar el código alfanumérico
-  Future<void> _verificarCodigo() async {
+  Future<void> _loginConCodigo() async {
     final codigo = _codeController.text.trim();
     if (codigo.length != 6) {
       setState(() => _errorMessage = 'El código debe tener exactamente 6 caracteres.');
@@ -40,57 +31,21 @@ class _VincularScreenState extends State<VincularScreen> {
     });
 
     try {
-      final info = await _authService.verificarCodigo(codigo);
-      if (info['vinculado'] == true) {
-        setState(() {
-          _errorMessage = 'Este dispositivo/código ya está vinculado a una cuenta.';
-          _isLoading = false;
-        });
-        return;
-      }
-      setState(() {
-        _hijoNombre = info['nombre'] as String? ?? '';
-        _hijoApellido = info['apellido'] as String? ?? '';
-        _step = 2;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
-        _isLoading = false;
-      });
-    }
-  }
-
-  // Paso 2: Vincular y crear usuario
-  Future<void> _completarVinculacion() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-
-    try {
-      final codigo = _codeController.text.trim();
-      final email = _emailController.text.trim();
-      final password = _passwordController.text;
-
-      final user = await _authService.vincularHijo(codigo, email, password);
+      final user = await _authService.loginConCodigo(codigo);
       
       if (!mounted) return;
       
-      // Mostrar feedback y navegar al home del hijo
+      // Mostrar feedback y navegar al dashboard del hijo
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('¡Vinculación exitosa! Bienvenido ${user.nombre}'),
+          content: Text('¡Inicio de sesión exitoso! Bienvenido ${user.nombre}'),
           backgroundColor: AppTheme.colorSafe,
         ),
       );
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const HijoStatusScreen()),
+        MaterialPageRoute(builder: (context) => const HijoDashboardScreen()),
         (route) => false,
       );
     } catch (e) {
@@ -107,7 +62,7 @@ class _VincularScreenState extends State<VincularScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vincular Dispositivo'),
+        title: const Text('Ingresar como Hijo'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -158,123 +113,41 @@ class _VincularScreenState extends State<VincularScreen> {
                 const SizedBox(height: 24),
               ],
 
-              // PASO 1: Ingreso de Código
-              if (_step == 1) ...[
-                Text(
-                  'Ingresá tu código',
-                  style: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
+              Text(
+                'Ingresá tu código',
+                style: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Pedile a tu tutor el código de 6 caracteres que generó en su aplicación.',
+                style: textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              TextField(
+                controller: _codeController,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: textTheme.headlineLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 8,
+                  color: AppTheme.primaryTeal,
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  'Pedile a tu tutor el código de 6 caracteres que generó en su aplicación.',
-                  style: textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  hintText: 'A3B7K9',
+                  counterText: '',
                 ),
-                const SizedBox(height: 32),
-                TextField(
-                  controller: _codeController,
-                  maxLength: 6,
-                  textAlign: TextAlign.center,
-                  style: textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 8,
-                    color: AppTheme.primaryTeal,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: 'A3B7K9',
-                    counterText: '',
-                  ),
-                  textCapitalization: TextCapitalization.characters,
-                  autofocus: true,
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _verificarCodigo,
-                  child: _isLoading 
-                      ? const CircularProgressIndicator(color: Colors.white) 
-                      : const Text('Verificar Código'),
-                ),
-              ],
-
-              // PASO 2: Confirmar datos y crear cuenta
-              if (_step == 2) ...[
-                Text(
-                  '¿Sos $_hijoNombre $_hijoApellido?',
-                  style: textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryTeal,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Confirmá tu identidad y configurá tus credenciales finales de acceso.',
-                  style: textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Correo Electrónico Definitivo',
-                          hintText: 'ejemplo@correo.com',
-                          prefixIcon: Icon(Icons.email_outlined),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Por favor ingresá un correo.';
-                          }
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                            return 'Formato de correo inválido.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Contraseña de Acceso',
-                          prefixIcon: Icon(Icons.lock_outline),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Por favor ingresá una contraseña.';
-                          }
-                          if (value.length < 6) {
-                            return 'La contraseña debe tener mínimo 6 caracteres.';
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _completarVinculacion,
-                  child: _isLoading 
-                      ? const CircularProgressIndicator(color: Colors.white) 
-                      : const Text('Confirmar y Vincular'),
-                ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _step = 1;
-                      _codeController.clear();
-                    });
-                  },
-                  child: const Text('Volver atrás'),
-                ),
-              ],
+                textCapitalization: TextCapitalization.characters,
+                autofocus: true,
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _loginConCodigo,
+                child: _isLoading 
+                    ? const CircularProgressIndicator(color: Colors.white) 
+                    : const Text('Iniciar Sesión'),
+              ),
             ],
           ),
         ),
