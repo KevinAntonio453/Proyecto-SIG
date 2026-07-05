@@ -27,17 +27,8 @@ import { UbicacionModule } from './ubicacion/ubicacion.module';
         const isProd = configService.get('NODE_ENV') === 'production';
         const dbUrl = configService.get('DATABASE_URL');
 
-        return {
+        const options: any = {
           type: 'postgres',
-          ...(dbUrl
-            ? { url: dbUrl }
-            : {
-                host: configService.get('DB_HOST'),
-                port: configService.get<number>('DB_PORT', 5432),
-                username: configService.get('DB_USERNAME'),
-                password: configService.get('DB_PASSWORD'),
-                database: configService.get('DB_NAME'),
-              }),
           entities: [User, Tutor, Hijo, Notification, ZonaSegura, Registro],
           synchronize: !isProd, // Desactivado en producción por seguridad
           logging: !isProd,
@@ -45,6 +36,18 @@ import { UbicacionModule } from './ubicacion/ubicacion.module';
             ? { rejectUnauthorized: false } // Requerido por Render Postgres
             : false,
         };
+
+        if (dbUrl) {
+          options.url = dbUrl;
+        } else {
+          options.host = configService.get('DB_HOST');
+          options.port = Number(configService.get('DB_PORT')) || 5432;
+          options.username = configService.get('DB_USERNAME');
+          options.password = configService.get('DB_PASSWORD');
+          options.database = configService.get('DB_NAME');
+        }
+
+        return options;
       },
       inject: [ConfigService],
     }),
