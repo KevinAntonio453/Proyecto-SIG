@@ -1,0 +1,20 @@
+# EditorConfig para SafeSteps Backend
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{ts,js,json}]
+indent_style = space
+indent_size = 2
+
+[*.sql]
+indent_style = space
+indent_size = 2
+# Archivos SQL son para PostgreSQL, no MSSQL
+
+[*.md]
+trim_trailing_whitespace = false

@@ -1,0 +1,29 @@
+# Node / NestJS
+**/node_modules/
+**/dist/
+**/.env
+**/*.log
+
+# Flutter / Dart
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.packages
+**/*.metadata
+
+# Credenciales y llaves sensibles (Seguridad)
+**/service-account.json
+**/FireBase Key.json
+**/*.pem
+**/*.key
+
+# IDEs
+**/.idea/
+**/.vscode/
+**/*.suo
+**/*.ntvs*
+**/*.njsproj
+**/*.sln
+**/*.db

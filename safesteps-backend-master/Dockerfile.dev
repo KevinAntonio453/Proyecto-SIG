@@ -1,0 +1,27 @@
+# Base image
+FROM node:20-alpine
+
+# Create app directory
+WORKDIR /usr/src/app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Remove old build
+RUN rm -rf dist
+
+# Copy configuration files
+COPY tsconfig*.json ./
+COPY nest-cli.json ./
+
+# Copy source code
+COPY src ./src
+
+# Expose the application port
+EXPOSE 3000
+
+# Start the application in development mode with hot-reload
+CMD ["sh", "-c", "npm run build && npm run start:dev"]

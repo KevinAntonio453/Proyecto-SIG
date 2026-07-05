@@ -1,0 +1,1037 @@
+================================================================================
+  GUÍA SENIOR: REGISTRO DE HIJO POR TUTOR - FRONTEND
+================================================================================
+
+Equipo: Frontend Web
+Backend: SafeSteps API v2.0
+Fecha: Diciembre 2025
+Autor: Arquitecto Backend Senior
+
+================================================================================
+  RESUMEN EJECUTIVO
+================================================================================
+
+El tutor puede registrar a sus hijos desde la interfaz web proporcionando
+ÚNICAMENTE datos básicos (nombre, apellido, teléfono). El sistema genera
+automáticamente un código de vinculación de 6 caracteres que el hijo usará
+para acceder a su aplicación móvil.
+
+IMPORTANTE:
+- NO solicitar email ni password del hijo
+- El hijo usará SOLO el código para hacer login en móvil
+- El código debe mostrarse claramente al tutor después del registro
+
+================================================================================
+  CAMBIOS PRINCIPALES
+================================================================================
+
+ANTES (❌ INCORRECTO):
+- Se pedía email y password del hijo
+- El hijo hacía login con email/password
+
+AHORA (✅ CORRECTO):
+- Solo se pide: nombre, apellido (opcional), teléfono (opcional)
+- Backend genera código automáticamente: Ej. "A3B7K9"
+- El hijo hace login SOLO con el código (sin email/password)
+
+================================================================================
+  ENDPOINT: REGISTRAR HIJO
+================================================================================
+
+URL: POST http://localhost:3000/tutores/registrar-hijo
+Método: POST
+Autenticación: Bearer Token (JWT del tutor)
+
+--------------------------------------------------------------------------------
+HEADERS
+--------------------------------------------------------------------------------
+
+Authorization: Bearer <JWT_TOKEN_DEL_TUTOR>
+Content-Type: application/json
+
+--------------------------------------------------------------------------------
+REQUEST BODY
+--------------------------------------------------------------------------------
+
+{
+  "nombre": "María",
+  "apellido": "González",     // OPCIONAL
+  "telefono": "987654321"     // OPCIONAL
+}
+
+VALIDACIONES:
+- nombre: REQUERIDO, mínimo 3 caracteres
+- apellido: OPCIONAL, si se envía mínimo 2 caracteres
+- telefono: OPCIONAL, si se envía mínimo 7 caracteres
+
+⚠️ NO ENVIAR:
+- email (se genera automáticamente)
+- password (se genera automáticamente)
+- latitud (solo desde app móvil del hijo)
+- longitud (solo desde app móvil del hijo)
+
+--------------------------------------------------------------------------------
+RESPONSE EXITOSA (201 Created)
+--------------------------------------------------------------------------------
+
+{
+  "id": 25,
+  "nombre": "María",
+  "apellido": "González",
+  "email": "hijo_k9p5m2@safesteps.temp",
+  "telefono": "987654321",
+  "codigoVinculacion": "K9P5M2",        ⭐ IMPORTANTE
+  "vinculado": false,
+  "tipo": "hijo",
+  "ultimaconexion": "2025-12-07T10:30:00Z",
+  "latitud": null,
+  "longitud": null
+}
+
+CAMPOS IMPORTANTES:
+- codigoVinculacion: El código que el tutor debe compartir con el hijo
+- vinculado: false = hijo aún no ha usado el código
+- email: Temporal, NO mostrar al usuario
+
+--------------------------------------------------------------------------------
+ERRORES POSIBLES
+--------------------------------------------------------------------------------
+
+401 Unauthorized
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+→ El token JWT es inválido o expiró
+→ Acción: Redirigir a login
+
+400 Bad Request
+{
+  "statusCode": 400,
+  "message": "El nombre debe tener al menos 3 caracteres"
+}
+→ Validaciones fallidas
+→ Acción: Mostrar mensaje de error al usuario
+
+500 Internal Server Error
+{
+  "statusCode": 500,
+  "message": "Error al registrar el hijo"
+}
+→ Error del servidor
+→ Acción: Mostrar mensaje genérico y reintentar
+
+================================================================================
+  FLUJO COMPLETO DE USUARIO
+================================================================================
+
+PASO 1: Tutor accede a "Mis Hijos"
+├─ Click en botón "Agregar Hijo" / "Registrar Hijo"
+└─ Se abre formulario de registro
+
+PASO 2: Tutor completa formulario
+├─ Nombre: [María]                    (REQUERIDO)
+├─ Apellido: [González]               (OPCIONAL)
+└─ Teléfono: [987654321]              (OPCIONAL)
+
+⚠️ NO MOSTRAR campos de email ni password
+
+PASO 3: Tutor envía formulario
+├─ Frontend valida campos localmente
+├─ Frontend hace POST a /tutores/registrar-hijo
+└─ Frontend muestra loader mientras espera respuesta
+
+PASO 4: Backend procesa registro
+├─ Valida que tutor está autenticado (JWT)
+├─ Valida datos del formulario
+├─ Genera código aleatorio: "K9P5M2"
+├─ Genera email temporal: "hijo_k9p5m2@safesteps.temp"
+├─ Genera password temporal aleatorio
+├─ Crea hijo en base de datos
+└─ Vincula hijo con tutor (relación many-to-many)
+
+PASO 5: Frontend recibe respuesta
+├─ Si éxito (201): Mostrar código en modal/dialog
+├─ Si error (4xx/5xx): Mostrar mensaje de error
+└─ Código debe ser GRANDE y VISIBLE
+
+PASO 6: Mostrar código al tutor
+┌────────────────────────────────────────┐
+│  ✅ Hijo Registrado Exitosamente      │
+│                                        │
+│  María González                        │
+│                                        │
+│  Código de Vinculación:                │
+│  ┌──────────────────────────┐         │
+│  │      K 9 P 5 M 2         │         │
+│  └──────────────────────────┘         │
+│                                        │
+│  [📋 Copiar]  [📤 Compartir]          │
+│                                        │
+│  Comparte este código con tu hijo     │
+│  para que acceda desde su móvil       │
+│                                        │
+│             [Cerrar]                   │
+└────────────────────────────────────────┘
+
+PASO 7: Tutor comparte código con hijo
+├─ Via WhatsApp, SMS, verbal, etc.
+└─ Hijo ingresa código en su app móvil
+
+PASO 8: Hijo usa código en móvil
+├─ Hijo abre app SafeSteps en su celular
+├─ Hijo ingresa código: "K9P5M2"
+├─ App hace: POST /auth/login-codigo
+├─ Backend marca hijo como "vinculado: true"
+└─ Hijo obtiene acceso a su cuenta
+
+================================================================================
+  IMPLEMENTACIÓN FRONTEND (Angular/React/Vue)
+================================================================================
+
+--------------------------------------------------------------------------------
+1. FORMULARIO DE REGISTRO
+--------------------------------------------------------------------------------
+
+HTML (Estructura):
+
+<form (submit)="onSubmit()">
+  
+  <!-- Nombre (Requerido) -->
+  <div class="form-group">
+    <label for="nombre">Nombre *</label>
+    <input 
+      type="text" 
+      id="nombre" 
+      name="nombre"
+      [(ngModel)]="form.nombre"
+      required
+      minlength="3"
+      placeholder="Ej: María"
+    />
+    <span class="error" *ngIf="errors.nombre">
+      {{ errors.nombre }}
+    </span>
+  </div>
+
+  <!-- Apellido (Opcional) -->
+  <div class="form-group">
+    <label for="apellido">Apellido (opcional)</label>
+    <input 
+      type="text" 
+      id="apellido" 
+      name="apellido"
+      [(ngModel)]="form.apellido"
+      minlength="2"
+      placeholder="Ej: González"
+    />
+  </div>
+
+  <!-- Teléfono (Opcional) -->
+  <div class="form-group">
+    <label for="telefono">Teléfono (opcional)</label>
+    <input 
+      type="tel" 
+      id="telefono" 
+      name="telefono"
+      [(ngModel)]="form.telefono"
+      minlength="7"
+      placeholder="Ej: 987654321"
+    />
+  </div>
+
+  <!-- Botón Submit -->
+  <button 
+    type="submit" 
+    [disabled]="loading || !isValid()"
+  >
+    {{ loading ? 'Registrando...' : 'Registrar Hijo' }}
+  </button>
+
+</form>
+
+⚠️ NO INCLUIR:
+- Campo de email
+- Campo de password
+- Campos de latitud/longitud
+
+--------------------------------------------------------------------------------
+2. TYPESCRIPT/JAVASCRIPT (Lógica)
+--------------------------------------------------------------------------------
+
+// Modelo de datos
+interface RegisterChildForm {
+  nombre: string;
+  apellido?: string;
+  telefono?: string;
+}
+
+// Modelo de respuesta
+interface ChildResponse {
+  id: number;
+  nombre: string;
+  apellido?: string;
+  email: string;
+  telefono?: string;
+  codigoVinculacion: string;
+  vinculado: boolean;
+  tipo: string;
+  ultimaconexion: string;
+  latitud?: number;
+  longitud?: number;
+}
+
+// Componente
+export class RegisterChildComponent {
+  
+  form: RegisterChildForm = {
+    nombre: '',
+    apellido: '',
+    telefono: ''
+  };
+
+  loading = false;
+  errors: any = {};
+
+  constructor(
+    private http: HttpClient,
+    private authService: AuthService,
+    private dialog: MatDialog  // Angular Material Dialog
+  ) {}
+
+  // Validación local
+  isValid(): boolean {
+    this.errors = {};
+    
+    if (!this.form.nombre || this.form.nombre.trim().length < 3) {
+      this.errors.nombre = 'El nombre debe tener al menos 3 caracteres';
+      return false;
+    }
+
+    if (this.form.apellido && this.form.apellido.trim().length < 2) {
+      this.errors.apellido = 'El apellido debe tener al menos 2 caracteres';
+      return false;
+    }
+
+    if (this.form.telefono && this.form.telefono.trim().length < 7) {
+      this.errors.telefono = 'El teléfono debe tener al menos 7 caracteres';
+      return false;
+    }
+
+    return true;
+  }
+
+  // Enviar formulario
+  async onSubmit() {
+    if (!this.isValid()) return;
+
+    this.loading = true;
+
+    try {
+      // Preparar datos (limpiar campos vacíos)
+      const payload: any = {
+        nombre: this.form.nombre.trim()
+      };
+
+      if (this.form.apellido && this.form.apellido.trim()) {
+        payload.apellido = this.form.apellido.trim();
+      }
+
+      if (this.form.telefono && this.form.telefono.trim()) {
+        payload.telefono = this.form.telefono.trim();
+      }
+
+      // Obtener token JWT
+      const token = this.authService.getToken();
+
+      // Llamada HTTP
+      const response = await this.http.post<ChildResponse>(
+        'http://localhost:3000/tutores/registrar-hijo',
+        payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      ).toPromise();
+
+      // Mostrar código en dialog
+      this.showCodigoDialog(response);
+
+      // Limpiar formulario
+      this.form = { nombre: '', apellido: '', telefono: '' };
+
+    } catch (error: any) {
+      console.error('Error al registrar hijo:', error);
+      
+      if (error.status === 401) {
+        alert('Sesión expirada. Por favor, inicia sesión nuevamente.');
+        // Redirigir a login
+      } else if (error.status === 400) {
+        alert(error.error.message || 'Datos inválidos');
+      } else {
+        alert('Error al registrar hijo. Intenta nuevamente.');
+      }
+      
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  // Mostrar código en dialog
+  showCodigoDialog(child: ChildResponse) {
+    this.dialog.open(CodigoDialogComponent, {
+      data: {
+        nombre: child.nombre + (child.apellido ? ' ' + child.apellido : ''),
+        codigo: child.codigoVinculacion
+      },
+      disableClose: true,  // No cerrar con clic fuera
+      width: '400px'
+    });
+  }
+}
+
+--------------------------------------------------------------------------------
+3. DIALOG/MODAL PARA MOSTRAR CÓDIGO
+--------------------------------------------------------------------------------
+
+// Componente del Dialog
+export class CodigoDialogComponent {
+  
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: {
+      nombre: string;
+      codigo: string;
+    },
+    private dialogRef: MatDialogRef<CodigoDialogComponent>
+  ) {}
+
+  // Copiar código al portapapeles
+  copiarCodigo() {
+    navigator.clipboard.writeText(this.data.codigo);
+    alert('Código copiado al portapapeles');
+  }
+
+  // Compartir código (Web Share API)
+  compartirCodigo() {
+    if (navigator.share) {
+      navigator.share({
+        title: 'SafeSteps - Código de Vinculación',
+        text: `Código de vinculación para ${this.data.nombre}: ${this.data.codigo}`
+      });
+    } else {
+      // Fallback: copiar
+      this.copiarCodigo();
+    }
+  }
+
+  // Cerrar dialog
+  cerrar() {
+    this.dialogRef.close();
+    // Navegar a lista de hijos o recargar
+    window.location.href = '/hijos';
+  }
+}
+
+--------------------------------------------------------------------------------
+4. CSS/ESTILOS SUGERIDOS
+--------------------------------------------------------------------------------
+
+/* Formulario */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.form-group .error {
+  display: block;
+  margin-top: 4px;
+  color: #dc3545;
+  font-size: 14px;
+}
+
+/* Botón Submit */
+button[type="submit"] {
+  width: 100%;
+  padding: 14px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button[type="submit"]:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+button[type="submit"]:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Dialog del Código */
+.codigo-dialog {
+  text-align: center;
+  padding: 24px;
+}
+
+.codigo-dialog h2 {
+  color: #28a745;
+  margin-bottom: 16px;
+}
+
+.codigo-display {
+  background: #f8f9fa;
+  border: 2px solid #007bff;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 24px 0;
+}
+
+.codigo-text {
+  font-size: 36px;
+  font-weight: bold;
+  letter-spacing: 8px;
+  color: #007bff;
+  font-family: 'Courier New', monospace;
+}
+
+.codigo-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.codigo-actions button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-copiar {
+  background: #28a745;
+  color: white;
+  border: none;
+}
+
+.btn-compartir {
+  background: #007bff;
+  color: white;
+  border: none;
+}
+
+.btn-cerrar {
+  background: #6c757d;
+  color: white;
+  border: none;
+}
+
+================================================================================
+  REGENERAR CÓDIGO (FUNCIONALIDAD ADICIONAL)
+================================================================================
+
+ENDPOINT: POST http://localhost:3000/hijos/:id/regenerar-codigo
+Autenticación: Bearer Token (JWT del tutor)
+
+USO: Cuando el hijo pierde su celular o el código está comprometido
+
+--------------------------------------------------------------------------------
+REQUEST
+--------------------------------------------------------------------------------
+
+POST /hijos/25/regenerar-codigo
+Authorization: Bearer <JWT_TOKEN_DEL_TUTOR>
+
+(Sin body)
+
+--------------------------------------------------------------------------------
+RESPONSE
+--------------------------------------------------------------------------------
+
+{
+  "codigoVinculacion": "N3W7C9"
+}
+
+--------------------------------------------------------------------------------
+IMPLEMENTACIÓN
+--------------------------------------------------------------------------------
+
+async regenerarCodigo(hijoId: number) {
+  const confirmacion = confirm(
+    '¿Deseas regenerar el código?\n\n' +
+    '⚠️ El código anterior quedará inválido.\n' +
+    '✅ El nuevo código permitirá acceso desde un nuevo dispositivo.'
+  );
+
+  if (!confirmacion) return;
+
+  try {
+    const token = this.authService.getToken();
+
+    const response = await this.http.post<{ codigoVinculacion: string }>(
+      `http://localhost:3000/hijos/${hijoId}/regenerar-codigo`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    ).toPromise();
+
+    // Mostrar nuevo código
+    alert(`Nuevo código generado: ${response.codigoVinculacion}`);
+
+    // Copiar al portapapeles
+    navigator.clipboard.writeText(response.codigoVinculacion);
+
+  } catch (error: any) {
+    if (error.status === 401) {
+      alert('No tienes permisos para regenerar este código');
+    } else {
+      alert('Error al regenerar código');
+    }
+  }
+}
+
+USO EN LA UI:
+
+En la tarjeta de cada hijo en la lista, agregar botón:
+
+<button (click)="regenerarCodigo(hijo.id)">
+  🔄 Regenerar Código
+</button>
+
+================================================================================
+  LISTA DE HIJOS (ACTUALIZACIÓN)
+================================================================================
+
+ENDPOINT: GET http://localhost:3000/tutores/:id/hijos
+Autenticación: Bearer Token (JWT del tutor)
+
+--------------------------------------------------------------------------------
+RESPONSE
+--------------------------------------------------------------------------------
+
+[
+  {
+    "id": 25,
+    "nombre": "María",
+    "apellido": "González",
+    "email": "hijo_k9p5m2@safesteps.temp",
+    "telefono": "987654321",
+    "codigoVinculacion": "K9P5M2",
+    "vinculado": true,
+    "ultimaconexion": "2025-12-07T14:20:00Z",
+    "latitud": -12.046373,
+    "longitud": -77.042754
+  },
+  {
+    "id": 26,
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "email": "hijo_a3b7k9@safesteps.temp",
+    "telefono": "555-1234",
+    "codigoVinculacion": "A3B7K9",
+    "vinculado": false,
+    "ultimaconexion": null,
+    "latitud": null,
+    "longitud": null
+  }
+]
+
+--------------------------------------------------------------------------------
+UI SUGERIDA PARA TARJETA DE HIJO
+--------------------------------------------------------------------------------
+
+┌──────────────────────────────────────┐
+│  MG   María González                 │
+│       ✅ Vinculado                   │
+│                                      │
+│  📧 hijo_k9p5m2@safesteps.temp      │  ← NO MOSTRAR (solo para debug)
+│  📱 987654321                        │
+│  🕒 Hace 2 horas                     │
+│                                      │
+│  Código: K9P5M2  [📋 Copiar]        │
+│                                      │
+│  [✏️ Editar]  [🔄 Regenerar Código]  │
+└──────────────────────────────────────┘
+
+BADGE DE ESTADO:
+- vinculado: true  → Badge verde "✅ Vinculado"
+- vinculado: false → Badge amarillo "⏳ Pendiente"
+
+================================================================================
+  CHECKLIST DE IMPLEMENTACIÓN
+================================================================================
+
+BACKEND (✅ YA ESTÁ LISTO):
+[✅] Endpoint POST /tutores/registrar-hijo
+[✅] Endpoint POST /hijos/:id/regenerar-codigo
+[✅] Endpoint GET /tutores/:id/hijos
+[✅] Validaciones de DTO (solo nombre, apellido, teléfono)
+[✅] Generación automática de código
+[✅] Generación automática de email/password temporal
+[✅] Vinculación tutor-hijo
+
+FRONTEND (⚠️ PENDIENTE):
+[ ] Crear formulario de registro de hijo
+    [ ] Campo: Nombre (requerido)
+    [ ] Campo: Apellido (opcional)
+    [ ] Campo: Teléfono (opcional)
+    [ ] NO incluir campos de email/password
+    [ ] Validaciones locales
+
+[ ] Implementar llamada HTTP POST /tutores/registrar-hijo
+    [ ] Incluir JWT en header Authorization
+    [ ] Manejar respuesta exitosa (201)
+    [ ] Manejar errores (401, 400, 500)
+
+[ ] Crear modal/dialog para mostrar código
+    [ ] Mostrar código GRANDE y VISIBLE
+    [ ] Botón "Copiar al portapapeles"
+    [ ] Botón "Compartir" (Web Share API)
+    [ ] Botón "Cerrar" (navega a lista de hijos)
+
+[ ] Actualizar lista de hijos
+    [ ] Mostrar código de vinculación
+    [ ] Mostrar estado (vinculado/pendiente)
+    [ ] NO mostrar email temporal
+    [ ] Botón "Regenerar Código"
+
+[ ] Implementar funcionalidad de regenerar código
+    [ ] Confirmación antes de regenerar
+    [ ] Llamada a POST /hijos/:id/regenerar-codigo
+    [ ] Mostrar nuevo código
+    [ ] Actualizar lista de hijos
+
+[ ] Testing
+    [ ] Probar registro con todos los campos
+    [ ] Probar registro solo con nombre
+    [ ] Probar validaciones de campos
+    [ ] Probar regeneración de código
+    [ ] Probar manejo de errores
+
+================================================================================
+  PREGUNTAS FRECUENTES (FAQ)
+================================================================================
+
+Q: ¿Por qué no se pide email ni password del hijo?
+A: El hijo usará SOLO un código de 6 caracteres para acceder. Es más simple
+   y seguro para niños. El email/password se generan automáticamente en el
+   backend solo por requisitos técnicos de la base de datos.
+
+Q: ¿Qué pasa con el email que devuelve el backend?
+A: Es un email temporal (hijo_codigo@safesteps.temp) que NO debe mostrarse
+   al usuario. Solo sirve internamente. Muestra solo el código.
+
+Q: ¿Puedo registrar un hijo sin apellido ni teléfono?
+A: Sí, solo el nombre es obligatorio. Apellido y teléfono son opcionales.
+
+Q: ¿Qué pasa si el hijo pierde su celular?
+A: El tutor puede regenerar el código desde la interfaz web. El código
+   anterior queda inválido y se genera uno nuevo.
+
+Q: ¿El código expira?
+A: No, el código no tiene expiración. El hijo puede usarlo cuando quiera.
+   Solo se invalida si el tutor lo regenera manualmente.
+
+Q: ¿Puedo registrar hijos sin estar autenticado?
+A: No, el tutor DEBE estar autenticado (JWT válido). Si el token expira,
+   debe iniciar sesión nuevamente.
+
+Q: ¿Cómo sé si el hijo ya usó el código?
+A: El campo "vinculado" indica si el hijo ya hizo login:
+   - vinculado: false → Código generado pero no usado
+   - vinculado: true  → Hijo ya accedió con el código
+
+Q: ¿Puedo cambiar el nombre o teléfono del hijo después?
+A: Sí, usa el endpoint PATCH /hijos/:id con los nuevos datos.
+
+================================================================================
+  EJEMPLOS DE CÓDIGO COMPLETOS
+================================================================================
+
+--------------------------------------------------------------------------------
+EJEMPLO 1: Angular Component Completo
+--------------------------------------------------------------------------------
+
+// register-child.component.ts
+import { Component } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { MatDialog } from '@angular/material/dialog';
+
+@Component({
+  selector: 'app-register-child',
+  templateUrl: './register-child.component.html'
+})
+export class RegisterChildComponent {
+  
+  form = {
+    nombre: '',
+    apellido: '',
+    telefono: ''
+  };
+
+  loading = false;
+  errors: any = {};
+
+  constructor(
+    private http: HttpClient,
+    private dialog: MatDialog
+  ) {}
+
+  isValid(): boolean {
+    this.errors = {};
+    
+    if (!this.form.nombre?.trim() || this.form.nombre.trim().length < 3) {
+      this.errors.nombre = 'El nombre debe tener al menos 3 caracteres';
+      return false;
+    }
+
+    if (this.form.apellido?.trim() && this.form.apellido.trim().length < 2) {
+      this.errors.apellido = 'El apellido debe tener al menos 2 caracteres';
+      return false;
+    }
+
+    if (this.form.telefono?.trim() && this.form.telefono.trim().length < 7) {
+      this.errors.telefono = 'El teléfono debe tener al menos 7 caracteres';
+      return false;
+    }
+
+    return true;
+  }
+
+  async onSubmit() {
+    if (!this.isValid()) return;
+
+    this.loading = true;
+
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      const payload: any = {
+        nombre: this.form.nombre.trim()
+      };
+
+      if (this.form.apellido?.trim()) {
+        payload.apellido = this.form.apellido.trim();
+      }
+
+      if (this.form.telefono?.trim()) {
+        payload.telefono = this.form.telefono.trim();
+      }
+
+      const response = await this.http.post(
+        'http://localhost:3000/tutores/registrar-hijo',
+        payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      ).toPromise();
+
+      this.showCodigoDialog(response);
+      this.form = { nombre: '', apellido: '', telefono: '' };
+
+    } catch (error: any) {
+      console.error('Error:', error);
+      alert(error.error?.message || 'Error al registrar hijo');
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  showCodigoDialog(child: any) {
+    this.dialog.open(CodigoDialogComponent, {
+      data: child,
+      disableClose: true,
+      width: '400px'
+    });
+  }
+}
+
+--------------------------------------------------------------------------------
+EJEMPLO 2: React Component Completo
+--------------------------------------------------------------------------------
+
+// RegisterChild.jsx
+import React, { useState } from 'react';
+import axios from 'axios';
+
+export const RegisterChild = () => {
+  
+  const [form, setForm] = useState({
+    nombre: '',
+    apellido: '',
+    telefono: ''
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [showModal, setShowModal] = useState(false);
+  const [codigo, setCodigo] = useState('');
+
+  const validate = () => {
+    const newErrors = {};
+
+    if (!form.nombre.trim() || form.nombre.trim().length < 3) {
+      newErrors.nombre = 'El nombre debe tener al menos 3 caracteres';
+    }
+
+    if (form.apellido.trim() && form.apellido.trim().length < 2) {
+      newErrors.apellido = 'El apellido debe tener al menos 2 caracteres';
+    }
+
+    if (form.telefono.trim() && form.telefono.trim().length < 7) {
+      newErrors.telefono = 'El teléfono debe tener al menos 7 caracteres';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validate()) return;
+
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      const payload = {
+        nombre: form.nombre.trim()
+      };
+
+      if (form.apellido.trim()) payload.apellido = form.apellido.trim();
+      if (form.telefono.trim()) payload.telefono = form.telefono.trim();
+
+      const response = await axios.post(
+        'http://localhost:3000/tutores/registrar-hijo',
+        payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      setCodigo(response.data.codigoVinculacion);
+      setShowModal(true);
+      setForm({ nombre: '', apellido: '', telefono: '' });
+
+    } catch (error) {
+      console.error('Error:', error);
+      alert(error.response?.data?.message || 'Error al registrar hijo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Registrar Hijo</h2>
+      
+      <form onSubmit={handleSubmit}>
+        
+        <div className="form-group">
+          <label>Nombre *</label>
+          <input
+            type="text"
+            value={form.nombre}
+            onChange={(e) => setForm({...form, nombre: e.target.value})}
+            placeholder="Ej: María"
+          />
+          {errors.nombre && <span className="error">{errors.nombre}</span>}
+        </div>
+
+        <div className="form-group">
+          <label>Apellido (opcional)</label>
+          <input
+            type="text"
+            value={form.apellido}
+            onChange={(e) => setForm({...form, apellido: e.target.value})}
+            placeholder="Ej: González"
+          />
+          {errors.apellido && <span className="error">{errors.apellido}</span>}
+        </div>
+
+        <div className="form-group">
+          <label>Teléfono (opcional)</label>
+          <input
+            type="tel"
+            value={form.telefono}
+            onChange={(e) => setForm({...form, telefono: e.target.value})}
+            placeholder="Ej: 987654321"
+          />
+          {errors.telefono && <span className="error">{errors.telefono}</span>}
+        </div>
+
+        <button type="submit" disabled={loading}>
+          {loading ? 'Registrando...' : 'Registrar Hijo'}
+        </button>
+        
+      </form>
+
+      {showModal && (
+        <CodigoModal 
+          codigo={codigo} 
+          onClose={() => setShowModal(false)} 
+        />
+      )}
+    </div>
+  );
+};
+
+================================================================================
+  CONTACTO Y SOPORTE
+================================================================================
+
+Backend API: http://localhost:3000
+Documentación Backend: Ver archivos .md en el repositorio
+- REGISTRO-HIJO-WEB.md
+- API-REGENERAR-CODIGO-HIJO.md
+
+Dudas o problemas:
+1. Revisar esta guía completa
+2. Probar endpoints con Postman/Thunder Client
+3. Verificar que el token JWT es válido
+4. Revisar console del navegador para errores
+
+================================================================================
+  FIN DE LA GUÍA
+================================================================================
+
+Versión: 2.0
+Última actualización: Diciembre 2025
+Estado: ✅ Backend listo para producción

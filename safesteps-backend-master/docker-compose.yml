@@ -1,0 +1,60 @@
+services:
+  postgis:
+    image: postgis/postgis:15-3.3
+    container_name: safesteps-postgis
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: safesteps
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - safesteps-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: safesteps-app
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgis
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: 123
+      DB_NAME: safesteps
+      PORT: 3000
+      NODE_ENV: development
+      JWT_SECRET: ${JWT_SECRET:-tu-clave-secreta-muy-segura-cambiala-en-produccion}
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/usr/src/app/src
+      - ./package.json:/usr/src/app/package.json
+      - ./tsconfig.json:/usr/src/app/tsconfig.json
+      - ./nest-cli.json:/usr/src/app/nest-cli.json
+    depends_on:
+      postgis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - safesteps-network
+
+volumes:
+  postgis_data:
+    driver: local
+
+networks:
+  safesteps-network:
+    driver: bridge
