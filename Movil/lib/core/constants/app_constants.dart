@@ -4,6 +4,6 @@ class AppConstants {
 
   // Dirección base del servidor (HTTP y WebSocket)
   // Para emulador Android usar 'http://10.0.2.2:3000'
-  static const String apiBaseUrl = 'http://10.0.2.2:3000';
-  static const String wsUrl = 'http://10.0.2.2:3000';
+  static const String apiBaseUrl = 'https://proyecto-sig-wx25.onrender.com';
+  static const String wsUrl = 'https://proyecto-sig-wx25.onrender.com';
 }
