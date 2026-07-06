@@ -11,10 +11,10 @@ export class Hijo extends User {
   @Column({ length: 20, nullable: true })
   telefono: string;
 
-  @Column({ type: 'float', nullable: true })
+  @Column({ type: 'double precision', nullable: true })
   latitud: number;
 
-  @Column({ type: 'float', nullable: true })
+  @Column({ type: 'double precision', nullable: true })
   longitud: number;
 
   @Column({ type: 'timestamp', nullable: true })

@@ -9,10 +9,10 @@ export class Registro {
   @Column('timestamp', { name: 'hora' })
   hora: Date;
 
-  @Column('float', { name: 'latitud' })
+  @Column('double precision', { name: 'latitud' })
   latitud: number;
 
-  @Column('float', { name: 'longitud' })
+  @Column('double precision', { name: 'longitud' })
   longitud: number;
 
   @ManyToOne(() => Hijo, hijo => hijo.id)
