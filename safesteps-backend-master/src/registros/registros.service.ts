@@ -1,5 +1,6 @@
 // src/registros/registros.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Registro } from './entities/registro.entity';
@@ -128,5 +129,30 @@ export class RegistrosService {
   async remove(id: number): Promise<void> {
     const registro = await this.findOne(id);
     await this.registrosRepository.remove(registro);
+  }
+
+  /**
+   * Tarea programada que se ejecuta todos los días a medianoche.
+   * Elimina los registros de ubicación que tengan más de 30 días de antigüedad
+   * para prevenir el crecimiento infinito de la base de datos.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async handleCronCleanOldRegistros() {
+    console.log('Iniciando limpieza de registros antiguos (Cron Job)...');
+    const treintaDiasAtras = new Date();
+    treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30);
+
+    try {
+      const result = await this.registrosRepository
+        .createQueryBuilder()
+        .delete()
+        .from(Registro)
+        .where('hora < :fecha', { fecha: treintaDiasAtras })
+        .execute();
+      
+      console.log(`Limpieza completada: ${result.affected} registros eliminados.`);
+    } catch (error) {
+      console.error('Error durante la limpieza automática de registros:', error);
+    }
   }
 }

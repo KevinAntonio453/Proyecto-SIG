@@ -16,8 +16,11 @@ import { RegistrosModule } from './registros/registros.module';
 import { Registro } from './registros/entities/registro.entity';
 import { UbicacionModule } from './ubicacion/ubicacion.module';
 
+import { ScheduleModule } from '@nestjs/schedule';
+
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
