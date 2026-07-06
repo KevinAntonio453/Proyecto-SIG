@@ -12,23 +12,27 @@ import '../models/registro.dart';
 import 'auth_service.dart';
 
 Future<void> initializeBackgroundService() async {
-  final service = FlutterBackgroundService();
+  try {
+    final service = FlutterBackgroundService();
 
-  await service.configure(
-    androidConfiguration: AndroidConfiguration(
-      onStart: onStart,
-      autoStart: false, // Se inicia al iniciar sesión como Hijo
-      isForegroundMode: true,
-      notificationChannelId: 'safesteps_location_channel',
-      initialNotificationTitle: 'SafeSteps',
-      initialNotificationContent: 'Rastreo de ubicación activo en segundo plano',
-    ),
-    iosConfiguration: IosConfiguration(
-      autoStart: false,
-      onForeground: onForeground,
-      onBackground: onIosBackground,
-    ),
-  );
+    await service.configure(
+      androidConfiguration: AndroidConfiguration(
+        onStart: onStart,
+        autoStart: false, // Se inicia al iniciar sesión como Hijo
+        isForegroundMode: true,
+        notificationChannelId: 'safesteps_location_channel',
+        initialNotificationTitle: 'SafeSteps',
+        initialNotificationContent: 'Rastreo de ubicación activo en segundo plano',
+      ),
+      iosConfiguration: IosConfiguration(
+        autoStart: false,
+        onForeground: onForeground,
+        onBackground: onIosBackground,
+      ),
+    );
+  } catch (e) {
+    print('❌ [BackgroundService] Error al configurar el servicio: $e');
+  }
 }
 
 @pragma('vm:entry-point')
@@ -38,6 +42,9 @@ void onStart(ServiceInstance service) async {
   Position? lastPosition;
 
   if (service is AndroidServiceInstance) {
+    // Es buena práctica forzar que sea Foreground Inmediatamente
+    service.setAsForegroundService();
+    
     service.on('setAsForeground').listen((event) {
       service.setAsForegroundService();
     });

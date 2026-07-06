@@ -29,26 +29,36 @@ void main() async {
 
     // --- Validar sesión almacenada ANTES de decidir la pantalla inicial ---
     final authService = AuthService();
-    var currentUser = await authService.getCurrentUser();
-    var userType = await authService.getUserType();
+    dynamic currentUser;
+    String? userType;
 
-    // Si hay sesión guardada, verificar que el token JWT no haya expirado
-    if (currentUser != null) {
-      final tokenValid = await authService.isTokenValid();
-      if (!tokenValid) {
-        print('⚠️ [main] Token JWT expirado. Limpiando sesión local.');
-        await authService.logout();
-        // Detener servicio de ubicación si estaba corriendo
-        try {
-          final service = FlutterBackgroundService();
-          final isRunning = await service.isRunning();
-          if (isRunning) {
-            service.invoke('stopService');
-          }
-        } catch (_) {}
-        currentUser = null;
-        userType = null;
+    try {
+      currentUser = await authService.getCurrentUser();
+      userType = await authService.getUserType();
+
+      // Si hay sesión guardada, verificar que el token JWT no haya expirado
+      if (currentUser != null) {
+        final tokenValid = await authService.isTokenValid();
+        if (!tokenValid) {
+          print('⚠️ [main] Token JWT expirado. Limpiando sesión local.');
+          await authService.logout();
+          // Detener servicio de ubicación si estaba corriendo
+          try {
+            final service = FlutterBackgroundService();
+            final isRunning = await service.isRunning();
+            if (isRunning) {
+              service.invoke('stopService');
+            }
+          } catch (_) {}
+          currentUser = null;
+          userType = null;
+        }
       }
+    } catch (e) {
+      print('❌ [main] Error al cargar la sesión. Limpiando datos corruptos: $e');
+      await authService.logout();
+      currentUser = null;
+      userType = null;
     }
 
     // Configurar interceptor global de sesión expirada (401) con debounce
