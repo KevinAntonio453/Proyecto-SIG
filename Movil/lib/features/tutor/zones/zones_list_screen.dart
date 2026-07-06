@@ -288,6 +288,8 @@ class _ZonesListScreenState extends State<ZonesListScreen> {
                                                           ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                                                           : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                                       userAgentPackageName: 'com.safesteps.safesteps',
+                                                      maxZoom: 20,
+                                                      maxNativeZoom: 18,
                                                     ),
                                                     PolygonLayer(
                                                       polygons: [

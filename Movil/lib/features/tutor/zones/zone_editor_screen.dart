@@ -217,6 +217,8 @@ class _ZoneEditorScreenState extends State<ZoneEditorScreen> {
                                   ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                                   : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                               userAgentPackageName: 'com.safesteps.safesteps',
+                              maxZoom: 20,
+                              maxNativeZoom: 18,
                             ),
                             if (_puntosPoligono.length >= 3)
                               PolygonLayer(

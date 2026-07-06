@@ -318,6 +318,8 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
                           ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                           : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safesteps',
+                      maxZoom: 20,
+                      maxNativeZoom: 18,
                     ),
                     // Capa de geocercas
                     PolygonLayer(polygons: polygons),
