@@ -42,15 +42,6 @@ class _VincularScreenState extends State<VincularScreen> {
 
       if (!mounted) return;
 
-      // Levantar el servicio en segundo plano para rastrear al hijo
-      final service = FlutterBackgroundService();
-      final isRunning = await service.isRunning();
-      if (!isRunning) {
-        await service.startService();
-      }
-
-      if (!mounted) return;
-
       // Mostrar feedback y navegar al dashboard del hijo
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
