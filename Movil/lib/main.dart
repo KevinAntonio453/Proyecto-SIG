@@ -51,15 +51,6 @@ void main() async {
   final authService = AuthService();
   final currentUser = await authService.getCurrentUser();
   final userType = await authService.getUserType();
-
-  // Si es un hijo autenticado, levantar el servicio en segundo plano de inmediato
-  if (currentUser != null && userType == 'hijo') {
-    final service = FlutterBackgroundService();
-    final isRunning = await service.isRunning();
-    if (!isRunning) {
-      await service.startService();
-    }
-  }
   
   runApp(
     ProviderScope(
