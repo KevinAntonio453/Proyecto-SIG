@@ -57,29 +57,49 @@ class SocketService {
     // Escuchar eventos en tiempo real enviados desde el backend
     _socket!.on('locationUpdated', (data) {
       print('🔌 Socket [locationUpdated]: $data');
-      for (var callback in _onLocationUpdatedCallbacks) {
-        callback(data as Map<String, dynamic>);
+      try {
+        final mapData = Map<String, dynamic>.from(data as Map);
+        for (var callback in _onLocationUpdatedCallbacks) {
+          callback(mapData);
+        }
+      } catch (e) {
+        print('Error parsing locationUpdated: $e');
       }
     });
 
     _socket!.on('childStatusChanged', (data) {
       print('🔌 Socket [childStatusChanged]: $data');
-      for (var callback in _onStatusChangedCallbacks) {
-        callback(data as Map<String, dynamic>);
+      try {
+        final mapData = Map<String, dynamic>.from(data as Map);
+        for (var callback in _onStatusChangedCallbacks) {
+          callback(mapData);
+        }
+      } catch (e) {
+        print('Error parsing childStatusChanged: $e');
       }
     });
 
     _socket!.on('panicAlert', (data) {
       print('🔌 Socket [panicAlert]: $data');
-      for (var callback in _onPanicAlertCallbacks) {
-        callback(data as Map<String, dynamic>);
+      try {
+        final mapData = Map<String, dynamic>.from(data as Map);
+        for (var callback in _onPanicAlertCallbacks) {
+          callback(mapData);
+        }
+      } catch (e) {
+        print('Error parsing panicAlert: $e');
       }
     });
 
     _socket!.on('locationRequested', (data) {
       print('🔌 Socket [locationRequested]: $data');
-      for (var callback in _onLocationRequestedCallbacks) {
-        callback(data as Map<String, dynamic>);
+      try {
+        final mapData = Map<String, dynamic>.from(data as Map);
+        for (var callback in _onLocationRequestedCallbacks) {
+          callback(mapData);
+        }
+      } catch (e) {
+        print('Error parsing locationRequested: $e');
       }
     });
   }

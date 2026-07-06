@@ -70,14 +70,27 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
     _socketService.marcarOnline();
 
     // Escuchar cuando el tutor solicita ubicación manual
-    _socketService.registerLocationRequestCallback((data) {
+    _socketService.registerLocationRequestCallback((data) async {
       print('Tutor solicitó ubicación manual.');
-      if (_currentPosition != null) {
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 5),
+        );
         _socketService.enviarUbicacion(
-          _currentPosition!.latitude,
-          _currentPosition!.longitude,
+          position.latitude,
+          position.longitude,
           status: 'requested',
         );
+      } catch (e) {
+        debugPrint('Error obteniendo ubicación en caliente: $e');
+        if (_currentPosition != null) {
+          _socketService.enviarUbicacion(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            status: 'requested',
+          );
+        }
       }
     });
 
