@@ -172,7 +172,7 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
     });
 
     if (hijo.latitud != null && hijo.longitud != null) {
-      _mapController.move(LatLng(hijo.latitud!, hijo.longitud!), 15);
+      _mapController.move(LatLng(hijo.latitud!, hijo.longitud!), 16.5);
     }
   }
 
@@ -376,6 +376,80 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
                     child: Icon(_isSatellite ? Icons.map_outlined : Icons.layers_outlined),
                   ),
                 ),
+
+                // Botón centrar en ubicación del hijo
+                Positioned(
+                  bottom: 230,
+                  right: 16,
+                  child: FloatingActionButton(
+                    heroTag: 'center_on_child_home',
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.primaryTeal,
+                    onPressed: () {
+                      if (_hijoSeleccionado != null && _hijoSeleccionado!.latitud != null && _hijoSeleccionado!.longitud != null) {
+                        _mapController.move(LatLng(_hijoSeleccionado!.latitud!, _hijoSeleccionado!.longitud!), 17.0);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('No hay ubicación disponible para centrar.'),
+                            backgroundColor: AppTheme.secondaryCoral,
+                          ),
+                        );
+                      }
+                    },
+                    child: const Icon(Icons.my_location),
+                  ),
+                ),
+
+                // Botón centrar en zona segura
+                if (_zonas.isNotEmpty)
+                  Positioned(
+                    bottom: 280,
+                    right: 16,
+                    child: Container(
+                      height: 40,
+                      width: 40,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
+                        ],
+                      ),
+                      child: PopupMenuButton<ZonaSegura>(
+                        icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryTeal, size: 20),
+                        tooltip: 'Centrar en Zona Segura',
+                        onSelected: (zona) {
+                          if (zona.puntos.isNotEmpty) {
+                            double sumLat = 0;
+                            double sumLng = 0;
+                            for (var p in zona.puntos) {
+                              sumLat += p.latitude;
+                              sumLng += p.longitude;
+                            }
+                            final center = LatLng(sumLat / zona.puntos.length, sumLng / zona.puntos.length);
+                            _mapController.move(center, 15.5);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Enfocando zona: ${zona.nombre}'),
+                                backgroundColor: AppTheme.primaryTeal,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                        itemBuilder: (context) {
+                          return _zonas.map((zona) {
+                            return PopupMenuItem<ZonaSegura>(
+                              value: zona,
+                              child: Text(zona.nombre),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
+                  ),
 
                 // 2. Cabecera flotante superior (Hola Ana + Campana)
                 Positioned(
