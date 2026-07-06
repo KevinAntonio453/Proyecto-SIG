@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../app/theme.dart';
 import '../../core/models/user.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/hijos_service.dart';
-import '../../core/services/socket_service.dart';
-import '../../core/services/registros_service.dart';
-import '../../core/models/registro.dart';
 import '../auth/welcome_screen.dart';
 
 class HijoStatusScreen extends StatefulWidget {
@@ -20,14 +18,12 @@ class HijoStatusScreen extends StatefulWidget {
 class _HijoStatusScreenState extends State<HijoStatusScreen> {
   final _authService = AuthService();
   final _hijosService = HijosService();
-  final _socketService = SocketService();
-  final _registrosService = RegistrosService();
 
   User? _currentUser;
   bool _isConnected = false;
   String _gpsStatus = 'Inicializando GPS...';
   Position? _currentPosition;
-  StreamSubscription<Position>? _positionStreamSubscription;
+  StreamSubscription? _serviceSubscription;
 
   // Estado del botón SOS
   double _sosProgress = 0.0;
@@ -49,53 +45,58 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
       });
     }
 
-    // 2. Conectar WebSocket y configurar escuchas
-    await _socketService.connect();
-    if (mounted) {
-      setState(() {
-        _isConnected = _socketService.isConnected;
-      });
-    }
+    // 2. Inicializar GPS y levantar servicio si es necesario
+    await _iniciarGps();
 
-    // Escuchar cambios de estado en el socket
-    _socketService.socket?.on('connect', (_) {
-      if (mounted) setState(() => _isConnected = true);
-      _socketService.marcarOnline();
+    // 3. Suscribirse a los eventos del servicio en segundo plano
+    final service = FlutterBackgroundService();
+
+    _serviceSubscription = service.on('update').listen((event) {
+      if (mounted && event != null) {
+        setState(() {
+          final lat = event['latitude'] as double?;
+          final lng = event['longitude'] as double?;
+          if (lat != null && lng != null) {
+            _currentPosition = Position(
+              latitude: lat,
+              longitude: lng,
+              timestamp: DateTime.now(),
+              accuracy: 0.0,
+              altitude: 0.0,
+              altitudeAccuracy: 0.0,
+              heading: 0.0,
+              headingAccuracy: 0.0,
+              speed: 0.0,
+              speedAccuracy: 0.0,
+            );
+          }
+          _gpsStatus = event['gpsStatus'] as String? ?? 'GPS Activo';
+        });
+      }
     });
-    
-    _socketService.socket?.on('disconnect', (_) {
-      if (mounted) setState(() => _isConnected = false);
+
+    service.on('status').listen((event) {
+      if (mounted && event != null) {
+        setState(() {
+          _isConnected = event['isConnected'] as bool? ?? false;
+        });
+      }
     });
 
-    _socketService.marcarOnline();
-
-    // Escuchar cuando el tutor solicita ubicación manual
-    _socketService.registerLocationRequestCallback((data) async {
-      print('Tutor solicitó ubicación manual.');
-      try {
-        final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 5),
-        );
-        _socketService.enviarUbicacion(
-          position.latitude,
-          position.longitude,
-          status: 'requested',
-        );
-      } catch (e) {
-        debugPrint('Error obteniendo ubicación en caliente: $e');
-        if (_currentPosition != null) {
-          _socketService.enviarUbicacion(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
-            status: 'requested',
-          );
+    service.on('sosSent').listen((event) {
+      if (mounted && event != null) {
+        final success = event['success'] as bool? ?? false;
+        if (success) {
+          _showSosSuccessDialog();
+        } else {
+          final error = event['error'] as String? ?? 'Error desconocido';
+          _showSosErrorSnackBar(error);
         }
       }
     });
 
-    // 3. Inicializar GPS
-    _iniciarGps();
+    // Consultar estado actual inicial
+    service.invoke('queryStatus');
   }
 
   Future<void> _iniciarGps() async {
@@ -123,43 +124,13 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
       return;
     }
 
-    if (mounted) setState(() => _gpsStatus = 'GPS Activo. Transmitiendo...');
-
-    // Configurar stream de ubicación en tiempo real
-    const LocationSettings locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 5, // Notificar cada 5 metros
-    );
-
-    _positionStreamSubscription = Geolocator.getPositionStream(
-      locationSettings: locationSettings,
-    ).listen((Position position) {
-      if (!mounted) return;
-      
-      setState(() {
-        _currentPosition = position;
-        _gpsStatus = 'Ubicación: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
-      });
-
-      // 1. Enviar ubicación en tiempo real por WebSocket
-      _socketService.enviarUbicacion(position.latitude, position.longitude);
-
-      // 2. Guardar registro en base de datos vía HTTP (historial de trayectorias)
-      if (_currentUser != null) {
-        _registrosService.registrarUbicacion(
-          Registro(
-            hora: DateTime.now(),
-            latitud: position.latitude,
-            longitud: position.longitude,
-            hijoId: _currentUser!.id,
-            fueOffline: false,
-          ),
-        ).then((_) => null).catchError((err) {
-          print('Error persistiendo ubicación: $err');
-          return null;
-        });
-      }
-    });
+    // Si los permisos están otorgados, arrancar el servicio en segundo plano si no está corriendo
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (!isRunning) {
+      await service.startService();
+    }
+    service.invoke('queryStatus');
   }
 
   // --- CONTROL DEL BOTÓN SOS ---
@@ -169,7 +140,7 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
 
     _sosTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       setState(() {
-        _sosProgress += 0.0167; // Aumentar hasta llegar a 1.0 en ~3 segundos (50ms * 60 = 3000ms)
+        _sosProgress += 0.0167; // Aumentar hasta llegar a 1.0 en ~3 segundos
         if (_sosProgress >= 1.0) {
           _sosProgress = 1.0;
           _triggerSos();
@@ -190,71 +161,71 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
   }
 
   Future<void> _triggerSos() async {
-    if (_currentUser == null || _currentPosition == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se puede enviar SOS. Esperando señal GPS.'),
-          backgroundColor: AppTheme.colorDanger,
-        ),
-      );
-      return;
-    }
+    if (_currentUser == null) return;
 
     setState(() {
       _sosActive = true;
     });
 
     try {
-      // 1. Emitir alerta de pánico por WebSocket (inmediato para tutores en sala)
-      _socketService.emitirAlertaPanic(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-      );
+      // 1. Invocar SOS por WebSocket en segundo plano
+      final service = FlutterBackgroundService();
+      service.invoke('triggerSos');
 
-      // 2. Enviar alerta por HTTP (para registro y notificaciones FCM)
+      // 2. Registrar SOS por HTTP
       await _hijosService.enviarSOS(_currentUser!.id);
-
-      if (!mounted) return;
-      
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          icon: const Icon(Icons.emergency, color: AppTheme.colorDanger, size: 48),
-          title: const Text('🚨 ALERTA SOS ENVIADA'),
-          content: const Text(
-            'Se ha notificado de inmediato a todos tus tutores con tu ubicación actual y se activó una alerta de pánico.',
-            textAlign: TextAlign.center,
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                setState(() => _sosActive = false);
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.colorDanger),
-              child: const Text('Entendido'),
-            ),
-          ],
-        ),
-      );
     } catch (e) {
-      setState(() {
-        _sosActive = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error enviando SOS: ${e.toString()}'),
-          backgroundColor: AppTheme.colorDanger,
-        ),
-      );
+      _showSosErrorSnackBar(e.toString());
     }
+  }
+
+  void _showSosSuccessDialog() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.emergency, color: AppTheme.colorDanger, size: 48),
+        title: const Text('🚨 ALERTA SOS ENVIADA'),
+        content: const Text(
+          'Se ha notificado de inmediato a todos tus tutores con tu ubicación actual y se activó una alerta de pánico.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              if (mounted) {
+                setState(() {
+                  _sosActive = false;
+                  _sosProgress = 0.0;
+                });
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.colorDanger),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSosErrorSnackBar(String error) {
+    if (!mounted) return;
+    setState(() {
+      _sosActive = false;
+      _sosProgress = 0.0;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error enviando SOS: $error'),
+        backgroundColor: AppTheme.colorDanger,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _positionStreamSubscription?.cancel();
-    _socketService.marcarOffline();
-    _socketService.disconnect();
+    _serviceSubscription?.cancel();
     _sosTimer?.cancel();
     super.dispose();
   }
@@ -270,7 +241,11 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              _socketService.marcarOffline();
+              final service = FlutterBackgroundService();
+              final isRunning = await service.isRunning();
+              if (isRunning) {
+                service.invoke('stopService');
+              }
               await _authService.logout();
               if (mounted) {
                 Navigator.pushAndRemoveUntil(

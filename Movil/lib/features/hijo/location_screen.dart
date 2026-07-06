@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -22,6 +24,7 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
   bool _isLoading = true;
   String _gpsStatus = 'Obteniendo ubicación...';
   bool _isSatellite = false;
+  StreamSubscription? _serviceSubscription;
 
   @override
   void initState() {
@@ -30,11 +33,32 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
   }
 
   Future<void> _inicializar() async {
-    await Future.wait([
-      _obtenerUbicacionActual(),
-      _cargarZonas(),
-    ]);
-    setState(() => _isLoading = false);
+    await _cargarZonas();
+    
+    // Suscribirse a las actualizaciones del servicio en segundo plano
+    final service = FlutterBackgroundService();
+    
+    _serviceSubscription = service.on('update').listen((event) {
+      if (mounted && event != null) {
+        final lat = event['latitude'] as double?;
+        final lng = event['longitude'] as double?;
+        if (lat != null && lng != null) {
+          setState(() {
+            _currentPosition = LatLng(lat, lng);
+            _gpsStatus = 'Ubicación en tiempo real activa';
+          });
+        }
+      }
+    });
+
+    service.invoke('queryStatus');
+    
+    // Obtener una coordenada inicial rápida
+    await _obtenerUbicacionActual();
+    
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _obtenerUbicacionActual() async {
@@ -59,7 +83,10 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition();
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5),
+      );
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
         _gpsStatus = 'Ubicación obtenida con éxito';
@@ -76,6 +103,12 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
     } catch (e) {
       debugPrint('Error al cargar zonas: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _serviceSubscription?.cancel();
+    super.dispose();
   }
 
   @override

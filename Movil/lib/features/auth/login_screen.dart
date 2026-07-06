@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart';
 import '../tutor/dashboard_screen.dart';
@@ -45,6 +46,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Redirigir según el tipo de usuario devuelto en el login
       if (user.tipo == 'hijo') {
+        final service = FlutterBackgroundService();
+        final isRunning = await service.isRunning();
+        if (!isRunning) {
+          await service.startService();
+        }
+        if (!mounted) return;
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const HijoStatusScreen()),

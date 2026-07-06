@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart';
@@ -164,6 +165,11 @@ class _HijoSettingsScreenState extends State<HijoSettingsScreen> {
           // 3. Cerrar Sesión
           ElevatedButton.icon(
             onPressed: () async {
+              final service = FlutterBackgroundService();
+              final isRunning = await service.isRunning();
+              if (isRunning) {
+                service.invoke('stopService');
+              }
               await _authService.logout();
               if (mounted) {
                 Navigator.pushAndRemoveUntil(
