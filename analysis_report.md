@@ -37,8 +37,10 @@ Se analizaron **todos los archivos** del proyecto. Este reporte está organizado
 
 ---
 
-### 6. No hay refresh de token JWT (Móvil)
-Si el token expira (24h), todas las llamadas API fallan silenciosamente con 401. No hay interceptor, no hay redirección al login, no hay refresh token.
+### 6. ✅ [RESUELTO] No hay refresh de token JWT (Móvil)
+*   **Solución**: Se implementó un esquema dual robusto:
+    1.  **En Backend (`AuthModule` / `UbicacionModule`)**: Se unificaron y extendieron las expiraciones de JWT a `365d` (1 año) para evitar deslogueos diarios en segundo plano.
+    2.  **En Móvil (`ApiClient` / `main.dart`)**: Se configuró un interceptor global de errores `401`. Si ocurre una desautorización, la app móvil limpia el estado local de sesión (`access_token`, `user_data`, `user_type`), detiene de forma limpia el `BackgroundService` y redirige al usuario a la pantalla de bienvenida (`WelcomeScreen`) mostrando un mensaje informativo a través de claves globales (`navigatorKey` y `scaffoldMessengerKey`).
 
 ---
 
@@ -170,8 +172,8 @@ No hay throttling en ningún endpoint. Los endpoints sin auth (`verificar-codigo
 
 | Severidad | Total Inicial | Resueltos | Pendientes |
 |-----------|---------------|-----------|------------|
-| 🔴 Crítico | 6 | 4 | 2 |
+| 🔴 Crítico | 6 | 5 | 1 |
 | 🟠 Mayor | 6 | 1 | 5 |
 | 🟡 Moderado | 8 | 2 | 6 |
 | 🟢 Menor | 13 | 0 | 13 |
-| **Total** | **33** | **7** | **26** |
+| **Total** | **33** | **8** | **25** |
