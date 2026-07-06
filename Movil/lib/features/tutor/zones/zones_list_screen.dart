@@ -18,6 +18,7 @@ class _ZonesListScreenState extends State<ZonesListScreen> {
   List<ZonaSegura> _zonas = [];
   bool _isLoading = true;
   String _errorMessage = '';
+  bool _isSatellite = false;
 
   @override
   void initState() {
@@ -117,25 +118,42 @@ class _ZonesListScreenState extends State<ZonesListScreen> {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Encabezado (Título y Subtítulo)
+                      // Encabezado (Título y Subtítulo con botón satélite)
                       Padding(
                         padding: const EdgeInsets.only(left: 24, right: 24, top: 24, bottom: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Tus Zonas Seguras',
-                              style: textTheme.headlineLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.onSurface,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Tus Zonas Seguras',
+                                    style: textTheme.headlineLarge?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.onSurface,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Define perímetros de seguridad para recibir alertas automáticas',
+                                    style: textTheme.bodyMedium?.copyWith(
+                                      color: AppTheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Define perímetros de seguridad para recibir alertas automáticas',
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.onSurfaceVariant,
-                              ),
+                            IconButton(
+                              icon: Icon(_isSatellite ? Icons.map_outlined : Icons.layers_outlined),
+                              onPressed: () {
+                                setState(() {
+                                  _isSatellite = !_isSatellite;
+                                });
+                              },
+                              tooltip: 'Alternar satélite',
+                              color: AppTheme.primaryTeal,
                             ),
                           ],
                         ),
@@ -266,7 +284,9 @@ class _ZonesListScreenState extends State<ZonesListScreen> {
                                                   ),
                                                   children: [
                                                     TileLayer(
-                                                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                                      urlTemplate: _isSatellite 
+                                                          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                                                          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                                       userAgentPackageName: 'com.safesteps.safesteps',
                                                     ),
                                                     PolygonLayer(

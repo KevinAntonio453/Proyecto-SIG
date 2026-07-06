@@ -34,6 +34,7 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
   Hijo? _hijoSeleccionado;
   bool _isLoading = true;
   bool _mostrarRuta = false;
+  bool _isSatellite = false;
 
 
   @override
@@ -313,7 +314,9 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate: _isSatellite 
+                          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safesteps',
                     ),
                     // Capa de geocercas
@@ -332,6 +335,24 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
                     // Capa de marcadores
                     MarkerLayer(markers: markers),
                   ],
+                ),
+
+                // Botón alternar satélite
+                Positioned(
+                  bottom: 180,
+                  right: 16,
+                  child: FloatingActionButton(
+                    heroTag: 'toggle_satellite_map_screen',
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.primaryTeal,
+                    onPressed: () {
+                      setState(() {
+                        _isSatellite = !_isSatellite;
+                      });
+                    },
+                    child: Icon(_isSatellite ? Icons.map_outlined : Icons.layers_outlined),
+                  ),
                 ),
 
                 // 2. Chips de Selección rápida de Hijos (Superior)

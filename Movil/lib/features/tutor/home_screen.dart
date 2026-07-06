@@ -35,6 +35,7 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
   String _nombreTutor = 'Tutor';
   bool _isLoading = true;
   bool _mostrarRuta = false;
+  bool _isSatellite = false;
 
   @override
   void initState() {
@@ -330,7 +331,9 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate: _isSatellite 
+                          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safesteps',
                     ),
                     PolygonLayer(polygons: polygons),
@@ -346,6 +349,24 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
                       ),
                     MarkerLayer(markers: markers),
                   ],
+                ),
+
+                // Botón alternar satélite
+                Positioned(
+                  bottom: 180,
+                  right: 16,
+                  child: FloatingActionButton(
+                    heroTag: 'toggle_satellite_home',
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.primaryTeal,
+                    onPressed: () {
+                      setState(() {
+                        _isSatellite = !_isSatellite;
+                      });
+                    },
+                    child: Icon(_isSatellite ? Icons.map_outlined : Icons.layers_outlined),
+                  ),
                 ),
 
                 // 2. Cabecera flotante superior (Hola Ana + Campana)

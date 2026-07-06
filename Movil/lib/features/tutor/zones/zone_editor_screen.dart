@@ -31,6 +31,7 @@ class _ZoneEditorScreenState extends State<ZoneEditorScreen> {
 
   bool _isLoading = true;
   String _errorMessage = '';
+  bool _isSatellite = false;
 
   @override
   void initState() {
@@ -212,7 +213,9 @@ class _ZoneEditorScreenState extends State<ZoneEditorScreen> {
                           ),
                           children: [
                             TileLayer(
-                              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              urlTemplate: _isSatellite 
+                                  ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                                  : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                               userAgentPackageName: 'com.safesteps.safesteps',
                             ),
                             if (_puntosPoligono.length >= 3)
@@ -264,6 +267,23 @@ class _ZoneEditorScreenState extends State<ZoneEditorScreen> {
                               }).toList(),
                             ),
                           ],
+                        ),
+                        // Botón alternar satélite
+                        Positioned(
+                          top: 12,
+                          right: 16,
+                          child: FloatingActionButton(
+                            heroTag: 'toggle_satellite_editor',
+                            mini: true,
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppTheme.primaryTeal,
+                            onPressed: () {
+                              setState(() {
+                                _isSatellite = !_isSatellite;
+                              });
+                            },
+                            child: Icon(_isSatellite ? Icons.map_outlined : Icons.layers_outlined),
+                          ),
                         ),
                         // Tooltip flotante instructivo (Mockup 2)
                         Positioned(

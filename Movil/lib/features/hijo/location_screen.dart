@@ -21,6 +21,7 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
   List<ZonaSegura> _zonas = [];
   bool _isLoading = true;
   String _gpsStatus = 'Obteniendo ubicación...';
+  bool _isSatellite = false;
 
   @override
   void initState() {
@@ -48,54 +49,46 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          setState(() => _gpsStatus = 'Permisos denegados.');
+          setState(() => _gpsStatus = 'Permiso de ubicación denegado.');
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        setState(() => _gpsStatus = 'Permisos denegados permanentemente.');
+        setState(() => _gpsStatus = 'Permisos de ubicación denegados permanentemente.');
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
+      final position = await Geolocator.getCurrentPosition();
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
-        _gpsStatus = 'GPS activo.';
+        _gpsStatus = 'Ubicación obtenida con éxito';
       });
-
-      _mapController.move(_currentPosition!, 16);
     } catch (e) {
-      setState(() => _gpsStatus = 'Error al obtener ubicación.');
+      setState(() => _gpsStatus = 'Error al obtener ubicación: $e');
     }
   }
 
   Future<void> _cargarZonas() async {
     try {
-      final zonas = await _zonasService.getZonas();
+      final zonas = await _zonasService.getZonasHijo();
       setState(() => _zonas = zonas);
     } catch (e) {
-      // No bloquear la pantalla si falla la carga de zonas
-      print('Error cargando zonas: $e');
+      debugPrint('Error al cargar zonas: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     final polygons = _zonas.map((zona) {
       return Polygon(
-        points: zona.puntos,
-        color: AppTheme.colorSafe.withOpacity(0.2),
-        borderColor: AppTheme.colorSafe.withOpacity(0.8),
-        borderStrokeWidth: 2.5,
-        label: zona.nombre,
-        labelStyle: const TextStyle(
-          color: AppTheme.colorSafe,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
+        points: _generarPuntosCirculo(zona.latitud, zona.longitud, zona.radio),
+        color: AppTheme.primaryTeal.withOpacity(0.15),
+        borderStrokeWidth: 2,
+        borderColor: AppTheme.primaryTeal,
+        isFilled: true,
       );
     }).toList();
 
@@ -142,12 +135,31 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate: _isSatellite 
+                          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safesteps',
                     ),
                     PolygonLayer(polygons: polygons),
                     MarkerLayer(markers: markers),
                   ],
+                ),
+                // Botón alternar satélite
+                Positioned(
+                  bottom: 110,
+                  right: 16,
+                  child: FloatingActionButton(
+                    heroTag: 'toggle_satellite_hijo',
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.primaryTeal,
+                    onPressed: () {
+                      setState(() {
+                        _isSatellite = !_isSatellite;
+                      });
+                    },
+                    child: Icon(_isSatellite ? Icons.map_outlined : Icons.layers_outlined),
+                  ),
                 ),
                 // Estado de GPS
                 Positioned(
