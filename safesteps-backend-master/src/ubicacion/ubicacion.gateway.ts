@@ -105,7 +105,7 @@ export class UbicacionGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
 
     @SubscribeMessage('joinChildRoom')
-    handleJoinChildRoom(@ConnectedSocket() client: Socket, @MessageBody() data: { childId: string }) {
+    async handleJoinChildRoom(@ConnectedSocket() client: Socket, @MessageBody() data: { childId: string }) {
         // Verificar que el usuario sea un tutor
         const user = client.data.user;
         if (!user) {
@@ -113,7 +113,30 @@ export class UbicacionGateway implements OnGatewayConnection, OnGatewayDisconnec
             return;
         }
 
-        // TODO: Verificar que este tutor tiene permiso para ver a este hijo
+        // Verificar que este tutor tiene permiso para ver a este hijo
+        const childIdNum = parseInt(data.childId, 10);
+        if (isNaN(childIdNum)) {
+            client.emit('error', { message: 'ID de hijo inválido' });
+            return;
+        }
+        
+        const hijo = await this.hijoRepository.findOne({
+            where: { id: childIdNum },
+            relations: ['tutores'],
+        });
+
+        if (!hijo) {
+            client.emit('error', { message: 'Hijo no encontrado' });
+            return;
+        }
+
+        const esTutorDelHijo = hijo.tutores.some(tutor => tutor.id === user.sub);
+        if (!esTutorDelHijo) {
+            client.emit('error', { message: 'No tienes permisos para ver a este hijo' });
+            console.log(`❌ Tutor ${user.sub} bloqueado al intentar unirse a sala de hijo ${data.childId} (no vinculado)`);
+            return;
+        }
+
         const room = `hijo_${data.childId}`;
         client.join(room);
         console.log(`Tutor ${user.sub} unido a sala ${room}`);
@@ -207,10 +230,33 @@ export class UbicacionGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     // Método para solicitar ubicación actual del hijo
     @SubscribeMessage('requestLocation')
-    handleRequestLocation(@ConnectedSocket() client: Socket, @MessageBody() data: { childId: string }) {
+    async handleRequestLocation(@ConnectedSocket() client: Socket, @MessageBody() data: { childId: string }) {
         const user = client.data.user;
         if (!user) {
             client.emit('error', { message: 'No autenticado' });
+            return;
+        }
+
+        const childIdNum = parseInt(data.childId, 10);
+        if (isNaN(childIdNum)) {
+            client.emit('error', { message: 'ID de hijo inválido' });
+            return;
+        }
+        
+        const hijo = await this.hijoRepository.findOne({
+            where: { id: childIdNum },
+            relations: ['tutores'],
+        });
+
+        if (!hijo) {
+            client.emit('error', { message: 'Hijo no encontrado' });
+            return;
+        }
+
+        const esTutorDelHijo = hijo.tutores.some(tutor => tutor.id === user.sub);
+        if (!esTutorDelHijo) {
+            client.emit('error', { message: 'No tienes permisos para solicitar ubicación de este hijo' });
+            console.log(`❌ Tutor ${user.sub} bloqueado al intentar solicitar ubicación de hijo ${data.childId} (no vinculado)`);
             return;
         }
 

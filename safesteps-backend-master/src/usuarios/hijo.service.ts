@@ -400,4 +400,16 @@ export class HijoService {
       notificacionesEnviadas,
     };
   }
+
+  /**
+   * Verifica si un tutor está vinculado a un hijo específico
+   */
+  async belongsToTutor(hijoId: number, tutorId: number): Promise<boolean> {
+    const hijo = await this.hijoRepository.findOne({
+      where: { id: hijoId },
+      relations: ['tutores'],
+    });
+    if (!hijo) return false;
+    return hijo.tutores.some(t => t.id === tutorId);
+  }
 }

@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { HijoService } from './hijo.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -15,6 +16,7 @@ import { UpdateHijoDto } from './dto/update-hijo.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { VincularCodigoDto } from './dto/vincular-codigo.dto';
 import { GetUser } from '../common/decorators/get-user.decorator';
+import { User } from '../auth/entities/user.entity';
 
 @Controller('hijos')
 export class HijoController {
@@ -29,31 +31,62 @@ export class HijoController {
   @Get()
   @UseGuards(JwtAuthGuard)
   findAll() {
-    return this.hijoService.findAll();
+    throw new ForbiddenException('No tienes permiso para listar todos los hijos del sistema');
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  findOne(@Param('id') id: string) {
-    return this.hijoService.findOne(+id);
+  async findOne(@Param('id') id: string, @GetUser() user: User) {
+    const hijoId = +id;
+    if (user.tipo === 'hijo' && user.id === hijoId) {
+      return this.hijoService.findOne(hijoId);
+    }
+    if (user.tipo === 'tutor') {
+      const hasAccess = await this.hijoService.belongsToTutor(hijoId, user.id);
+      if (hasAccess) {
+        return this.hijoService.findOne(hijoId);
+      }
+    }
+    throw new ForbiddenException('No tienes permisos para acceder a los datos de este hijo');
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  update(@Param('id') id: string, @Body() updateHijoDto: UpdateHijoDto) {
-    return this.hijoService.update(+id, updateHijoDto);
+  async update(@Param('id') id: string, @Body() updateHijoDto: UpdateHijoDto, @GetUser() user: User) {
+    const hijoId = +id;
+    if (user.tipo === 'hijo' && user.id === hijoId) {
+      return this.hijoService.update(hijoId, updateHijoDto);
+    }
+    if (user.tipo === 'tutor') {
+      const hasAccess = await this.hijoService.belongsToTutor(hijoId, user.id);
+      if (hasAccess) {
+        return this.hijoService.update(hijoId, updateHijoDto);
+      }
+    }
+    throw new ForbiddenException('No tienes permisos para actualizar los datos de este hijo');
   }
 
   @Patch(':id/location')
   @UseGuards(JwtAuthGuard)
-  updateLocation(@Param('id') id: string, @Body() updateLocationDto: UpdateLocationDto) {
-    return this.hijoService.updateLocation(+id, updateLocationDto);
+  updateLocation(@Param('id') id: string, @Body() updateLocationDto: UpdateLocationDto, @GetUser() user: User) {
+    const hijoId = +id;
+    if (user.tipo !== 'hijo' || user.id !== hijoId) {
+      throw new ForbiddenException('Solo el propio hijo puede actualizar su ubicación');
+    }
+    return this.hijoService.updateLocation(hijoId, updateLocationDto);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  remove(@Param('id') id: string) {
-    return this.hijoService.remove(+id);
+  async remove(@Param('id') id: string, @GetUser() user: User) {
+    const hijoId = +id;
+    if (user.tipo === 'tutor') {
+      const hasAccess = await this.hijoService.belongsToTutor(hijoId, user.id);
+      if (hasAccess) {
+        return this.hijoService.remove(hijoId);
+      }
+    }
+    throw new ForbiddenException('Solo un tutor vinculado puede eliminar a este hijo');
   }
 
   /**
