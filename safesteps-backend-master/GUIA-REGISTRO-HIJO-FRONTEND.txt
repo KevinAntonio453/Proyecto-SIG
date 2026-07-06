@@ -4,7 +4,7 @@
 
 Equipo: Frontend Web
 Backend: SafeSteps API v2.0
-Fecha: Diciembre 2025
+Fecha: julio 2026
 Autor: Arquitecto Backend Senior
 
 ================================================================================

@@ -71,7 +71,7 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
 
   Future<void> _cargarZonas() async {
     try {
-      final zonas = await _zonasService.getZonasHijo();
+      final zonas = await _zonasService.getZonas();
       setState(() => _zonas = zonas);
     } catch (e) {
       debugPrint('Error al cargar zonas: $e');
@@ -82,13 +82,12 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
-    final polygons = _zonas.map((zona) {
+    final polygons = _zonas.map<Polygon<Object>>((zona) {
       return Polygon(
-        points: _generarPuntosCirculo(zona.latitud, zona.longitud, zona.radio),
+        points: zona.puntos,
         color: AppTheme.primaryTeal.withOpacity(0.15),
         borderStrokeWidth: 2,
         borderColor: AppTheme.primaryTeal,
-        isFilled: true,
       );
     }).toList();
 
