@@ -9,6 +9,7 @@ class SocketService {
 
   IO.Socket? _socket;
   bool _isConnected = false;
+  final Set<int> _monitoredChildIds = {};
 
   bool get isConnected => _isConnected;
   IO.Socket? get socket => _socket;
@@ -36,12 +37,31 @@ class SocketService {
       .setAuth({'token': token})
       .setQuery({'token': token, 'device': 'Mobile-App'})
       .enableAutoConnect()
+      .enableReconnection() // Reconexión activa
+      .setReconnectionDelay(2000) // Retraso inicial de 2 segundos
+      .setReconnectionDelayMax(30000) // Retraso máximo de 30 segundos
+      .setReconnectionAttempts(99999) // Intentos infinitos
       .build()
     );
 
     _socket!.onConnect((_) {
       _isConnected = true;
       print('🔌 Socket: Conexión establecida con éxito.');
+
+      // 1. Si es tutor, re-suscribirse a los hijos monitoreados tras reconexión
+      for (var hijoId in _monitoredChildIds) {
+        _socket!.emit('joinChildRoom', {'childId': hijoId.toString()});
+        print('🔌 Socket: Auto-resuscrito al canal del hijo: $hijoId');
+      }
+
+      // 2. Si es hijo, marcarse online tras reconexión
+      SharedPreferences.getInstance().then((prefs) {
+        final userType = prefs.getString('user_type');
+        if (userType == 'hijo') {
+          marcarOnline();
+          print('🔌 Socket: Auto-marcado online en reconexión.');
+        }
+      });
     });
 
     _socket!.onDisconnect((_) {
@@ -108,6 +128,7 @@ class SocketService {
 
   // Unirse al canal de un hijo para recibir sus eventos en tiempo real
   void suscribirseAHijo(int hijoId) {
+    _monitoredChildIds.add(hijoId);
     if (_socket == null || !_socket!.connected) return;
     _socket!.emit('joinChildRoom', {'childId': hijoId.toString()});
     print('suscribirseAHijo enviado para ID: $hijoId');
@@ -115,6 +136,7 @@ class SocketService {
 
   // Salir del canal de un hijo
   void desuscribirseDeHijo(int hijoId) {
+    _monitoredChildIds.remove(hijoId);
     if (_socket == null || !_socket!.connected) return;
     _socket!.emit('leaveChildRoom', {'childId': hijoId.toString()});
     print('desuscribirseDeHijo enviado para ID: $hijoId');
@@ -178,6 +200,7 @@ class SocketService {
 
   // Cerrar conexión
   void disconnect() {
+    _monitoredChildIds.clear();
     if (_socket != null) {
       _socket!.disconnect();
       _socket = null;
