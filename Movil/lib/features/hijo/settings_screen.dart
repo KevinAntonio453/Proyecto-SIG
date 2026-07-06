@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/socket_service.dart';
 import '../../core/models/user.dart';
 import '../auth/welcome_screen.dart';
 
@@ -26,15 +26,21 @@ class _HijoSettingsScreenState extends State<HijoSettingsScreen> {
   }
 
   Future<void> _cargarDatos() async {
-    final user = await _authService.getCurrentUser();
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    final permission = await Geolocator.checkPermission();
+    try {
+      final user = await _authService.getCurrentUser();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final permission = await Geolocator.checkPermission();
 
-    setState(() {
-      _currentUser = user;
-      _gpsEnabled = serviceEnabled;
-      _locationPermission = permission;
-    });
+      if (mounted) {
+        setState(() {
+          _currentUser = user;
+          _gpsEnabled = serviceEnabled;
+          _locationPermission = permission;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar datos de settings: $e');
+    }
   }
 
   String _permissionLabel(LocationPermission p) {
@@ -144,20 +150,13 @@ class _HijoSettingsScreenState extends State<HijoSettingsScreen> {
               ),
               title: const Text('Permiso de Ubicación'),
               subtitle: Text(_permissionLabel(_locationPermission)),
-              trailing: (_locationPermission == LocationPermission.denied)
+              trailing: (_locationPermission == LocationPermission.denied ||
+                         _locationPermission == LocationPermission.deniedForever)
                   ? TextButton(
-                      onPressed: () async {
-                        final perm = await Geolocator.requestPermission();
-                        setState(() => _locationPermission = perm);
-                      },
-                      child: const Text('Solicitar'),
+                      onPressed: () => Geolocator.openAppSettings(),
+                      child: const Text('Abrir Ajustes'),
                     )
-                  : (_locationPermission == LocationPermission.deniedForever)
-                      ? TextButton(
-                          onPressed: () => Geolocator.openAppSettings(),
-                          child: const Text('Abrir Ajustes'),
-                        )
-                      : null,
+                  : null,
             ),
           ),
           const SizedBox(height: 32),
@@ -165,11 +164,9 @@ class _HijoSettingsScreenState extends State<HijoSettingsScreen> {
           // 3. Cerrar Sesión
           ElevatedButton.icon(
             onPressed: () async {
-              final service = FlutterBackgroundService();
-              final isRunning = await service.isRunning();
-              if (isRunning) {
-                service.invoke('stopService');
-              }
+              final socketService = SocketService();
+              socketService.marcarOffline();
+              socketService.disconnect();
               await _authService.logout();
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(

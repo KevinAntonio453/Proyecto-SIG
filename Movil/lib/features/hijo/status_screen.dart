@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../app/theme.dart';
 import '../../core/models/user.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/hijos_service.dart';
+import '../../core/services/socket_service.dart';
+import '../../core/services/registros_service.dart';
+import '../../core/models/registro.dart';
+import 'package:battery_plus/battery_plus.dart';
 import '../auth/welcome_screen.dart';
 
 class HijoStatusScreen extends StatefulWidget {
@@ -18,12 +21,18 @@ class HijoStatusScreen extends StatefulWidget {
 class _HijoStatusScreenState extends State<HijoStatusScreen> {
   final _authService = AuthService();
   final _hijosService = HijosService();
+  final _socketService = SocketService();
+  final _registrosService = RegistrosService();
 
   User? _currentUser;
   bool _isConnected = false;
   String _gpsStatus = 'Inicializando GPS...';
   Position? _currentPosition;
-  StreamSubscription? _serviceSubscription;
+
+  /// Stream de ubicación en PRIMER PLANO — sin FlutterBackgroundService
+  StreamSubscription<Position>? _positionSubscription;
+  /// Reconexión periódica del WebSocket
+  Timer? _reconnectTimer;
 
   // Estado del botón SOS
   double _sosProgress = 0.0;
@@ -41,154 +50,123 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
       // 1. Obtener datos del usuario logueado
       final user = await _authService.getCurrentUser();
       if (!mounted) return;
-      setState(() {
-        _currentUser = user;
+      setState(() => _currentUser = user);
+
+      // 2. Conectar WebSocket
+      await _socketService.connect();
+      _socketService.marcarOnline();
+      if (mounted) {
+        setState(() => _isConnected = _socketService.isConnected);
+      }
+
+      // Listener de conexión/desconexión
+      _socketService.socket?.on('connect', (_) {
+        _socketService.marcarOnline();
+        if (mounted) setState(() => _isConnected = true);
+      });
+      _socketService.socket?.on('disconnect', (_) {
+        if (mounted) setState(() => _isConnected = false);
       });
 
-      // 2. Inicializar GPS y levantar servicio si es necesario
-      await _iniciarGps();
-      if (!mounted) return;
-
-      // 3. Suscribirse a los eventos del servicio en segundo plano
-      final service = FlutterBackgroundService();
-
-      _serviceSubscription = service.on('update').listen((event) {
-        if (mounted && event != null) {
-          setState(() {
-            final lat = event['latitude'] as double?;
-            final lng = event['longitude'] as double?;
-            if (lat != null && lng != null) {
-              _currentPosition = Position(
-                latitude: lat,
-                longitude: lng,
-                timestamp: DateTime.now(),
-                accuracy: 0.0,
-                altitude: 0.0,
-                altitudeAccuracy: 0.0,
-                heading: 0.0,
-                headingAccuracy: 0.0,
-                speed: 0.0,
-                speedAccuracy: 0.0,
-              );
-            }
-            _gpsStatus = event['gpsStatus'] as String? ?? 'GPS Activo';
-          });
+      // Reconexión periódica
+      _reconnectTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+        if (!_socketService.isConnected) {
+          await _socketService.connect();
+          _socketService.marcarOnline();
+          if (mounted) setState(() => _isConnected = _socketService.isConnected);
         }
       });
 
-      service.on('status').listen((event) {
-        if (mounted && event != null) {
-          setState(() {
-            _isConnected = event['isConnected'] as bool? ?? false;
-          });
+      // Callback para cuando el tutor pide ubicación manual
+      _socketService.registerLocationRequestCallback((data) async {
+        try {
+          final position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 5),
+          );
+          double battery = 100.0;
+          try { battery = (await Battery().batteryLevel).toDouble(); } catch (_) {}
+          _socketService.enviarUbicacion(
+            position.latitude, position.longitude,
+            battery: battery, status: 'requested',
+          );
+        } catch (e) {
+          print('❌ [StatusScreen] Error en ubicación caliente: $e');
         }
       });
 
-      service.on('sosSent').listen((event) {
-        if (mounted && event != null) {
-          final success = event['success'] as bool? ?? false;
-          if (success) {
-            _showSosSuccessDialog();
-          } else {
-            final error = event['error'] as String? ?? 'Error desconocido';
-            _showSosErrorSnackBar(error);
-          }
-        }
-      });
-
-      // Consultar estado actual inicial
-      service.invoke('queryStatus');
+      // 3. Iniciar stream de ubicación en PRIMER PLANO
+      await _iniciarGpsStream();
     } catch (e) {
       print('❌ [HijoStatusScreen] Error al inicializar servicios: $e');
-      // No crashear - simplemente mostrar estado degradado
       if (mounted) {
-        setState(() {
-          _gpsStatus = 'Error al inicializar. Reinicia la app.';
-        });
+        setState(() => _gpsStatus = 'Error al inicializar. Reinicia la app.');
       }
     }
   }
 
-  Future<void> _iniciarGps() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    // Verificar si los servicios de ubicación están activos
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (mounted) setState(() => _gpsStatus = 'Servicios de ubicación inactivos.');
-      return;
-    }
-
-    // 1. Solicitar permisos de ubicación en primer plano (Mientras la app está en uso)
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        if (mounted) setState(() => _gpsStatus = 'Permisos de ubicación denegados.');
-        return;
-      }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      if (mounted) setState(() => _gpsStatus = 'Permisos de ubicación denegados permanentemente. Abrí los ajustes para habilitarlos.');
-      await Geolocator.openAppSettings();
-      return;
-    }
-
-    // 2. Si solo tiene "Mientras la app está en uso", pedir "Permitir siempre"
-    //    CRÍTICO: NO arrancar el servicio con solo whileInUse.
-    //    En Android 14+ (API 34) iniciar un ForegroundService con tipo "location"
-    //    sin ACCESS_BACKGROUND_LOCATION causa un SecurityException FATAL.
-    if (permission == LocationPermission.whileInUse) {
-      if (mounted) {
-        final goToSettings = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Permiso en segundo plano requerido'),
-            content: const Text(
-                'SafeSteps necesita acceder a tu ubicación "Todo el tiempo" para poder '
-                'actualizar tu posición a tus tutores incluso cuando cerrás la aplicación '
-                'o bloqueás la pantalla.\n\n'
-                'En la siguiente pantalla de ajustes, seleccioná "Permitir siempre".'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Ir a Ajustes'),
-              ),
-            ],
-          ),
-        ) ?? false;
-
-        if (goToSettings) {
-          await Geolocator.openAppSettings();
-        }
-
-        setState(() => _gpsStatus = 'Esperando permiso "Permitir siempre"...');
-      }
-      // NO arrancar el servicio. El usuario debe volver a abrir la app
-      // después de conceder el permiso en los ajustes de Android.
-      return;
-    }
-
-    // 3. Solo llegamos aquí si permission == LocationPermission.always
-    //    Ahora es SEGURO arrancar el servicio de ubicación en segundo plano.
+  /// Abre un stream de posición directamente con Geolocator.
+  /// NO usa FlutterBackgroundService. Funciona solo mientras la app está abierta.
+  Future<void> _iniciarGpsStream() async {
     try {
-      final service = FlutterBackgroundService();
-      final isRunning = await service.isRunning();
-      if (!isRunning) {
-        await service.startService();
-      }
-      service.invoke('queryStatus');
-    } catch (e) {
-      print('❌ [HijoStatusScreen] Error al iniciar servicio de ubicación: $e');
+      // Los permisos ya fueron verificados por HijoDashboardScreen,
+      // así que aquí solo abrimos el stream directamente.
+      const locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      );
+
+      _positionSubscription = Geolocator.getPositionStream(
+        locationSettings: locationSettings,
+      ).listen(
+        (Position position) async {
+          if (!mounted) return;
+          setState(() {
+            _currentPosition = position;
+            _gpsStatus = 'Ubicación: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+          });
+
+          // Obtener batería
+          double battery = 100.0;
+          try { battery = (await Battery().batteryLevel).toDouble(); } catch (_) {}
+
+          // Enviar por WebSocket
+          _socketService.enviarUbicacion(
+            position.latitude, position.longitude,
+            battery: battery,
+          );
+
+          // Persistir en la BD
+          if (_currentUser != null) {
+            final registro = Registro(
+              hora: DateTime.now(),
+              latitud: position.latitude,
+              longitud: position.longitude,
+              hijoId: _currentUser!.id,
+              fueOffline: false,
+            );
+            try {
+              await _registrosService.registrarUbicacion(registro);
+            } catch (e) {
+              print('❌ [StatusScreen] Error guardando registro: $e');
+            }
+          }
+        },
+        onError: (error) {
+          print('❌ [StatusScreen] Error en position stream: $error');
+          if (mounted) {
+            setState(() => _gpsStatus = 'Error de GPS: $error');
+          }
+        },
+      );
+
       if (mounted) {
-        setState(() => _gpsStatus = 'Error al iniciar el servicio de ubicación.');
+        setState(() => _gpsStatus = 'GPS activo, esperando posición...');
+      }
+    } catch (e) {
+      print('❌ [StatusScreen] Error al iniciar GPS stream: $e');
+      if (mounted) {
+        setState(() => _gpsStatus = 'Error al iniciar GPS: $e');
       }
     }
   }
@@ -200,7 +178,7 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
 
     _sosTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       setState(() {
-        _sosProgress += 0.0167; // Aumentar hasta llegar a 1.0 en ~3 segundos
+        _sosProgress += 0.0167;
         if (_sosProgress >= 1.0) {
           _sosProgress = 1.0;
           _triggerSos();
@@ -214,26 +192,26 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
     _sosTimer?.cancel();
     _sosTimer = null;
     if (_sosProgress < 1.0) {
-      setState(() {
-        _sosProgress = 0.0;
-      });
+      setState(() => _sosProgress = 0.0);
     }
   }
 
   Future<void> _triggerSos() async {
     if (_currentUser == null) return;
 
-    setState(() {
-      _sosActive = true;
-    });
+    setState(() => _sosActive = true);
 
     try {
-      // 1. Invocar SOS por WebSocket en segundo plano
-      final service = FlutterBackgroundService();
-      service.invoke('triggerSos');
-
-      // 2. Registrar SOS por HTTP
+      // Enviar SOS con ubicación actual por WebSocket
+      if (_currentPosition != null) {
+        _socketService.emitirAlertaPanic(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+        );
+      }
+      // Registrar SOS por HTTP
       await _hijosService.enviarSOS(_currentUser!.id);
+      _showSosSuccessDialog();
     } catch (e) {
       _showSosErrorSnackBar(e.toString());
     }
@@ -285,7 +263,8 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
 
   @override
   void dispose() {
-    _serviceSubscription?.cancel();
+    _positionSubscription?.cancel();
+    _reconnectTimer?.cancel();
     _sosTimer?.cancel();
     super.dispose();
   }
@@ -301,11 +280,8 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              final service = FlutterBackgroundService();
-              final isRunning = await service.isRunning();
-              if (isRunning) {
-                service.invoke('stopService');
-              }
+              _socketService.marcarOffline();
+              _socketService.disconnect();
               await _authService.logout();
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
@@ -328,14 +304,14 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: _isConnected 
+                  color: _isConnected
                       ? AppTheme.colorSafe.withOpacity(0.1)
                       : AppTheme.colorDanger.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _isConnected 
+                    color: _isConnected
                         ? AppTheme.colorSafe.withOpacity(0.3)
-                        : AppTheme.colorDanger.withOpacity(0.3)
+                        : AppTheme.colorDanger.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
@@ -387,7 +363,7 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
                             ),
                           ],
                         ),
-                          ),
+                      ),
                     ],
                   ),
                 ),
@@ -409,7 +385,7 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
                     const SizedBox(height: 8),
                     const Text('Mantené presionado por 3 segundos en caso de peligro.'),
                     const SizedBox(height: 32),
-                    
+
                     // Botón Circular SOS
                     GestureDetector(
                       onTapDown: (_) => _iniciarSosPress(),
@@ -418,7 +394,6 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Anillo de progreso exterior
                           SizedBox(
                             width: 170,
                             height: 170,
@@ -429,7 +404,6 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
                               valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.colorDanger),
                             ),
                           ),
-                          // Botón rojo interior
                           AnimatedContainer(
                             duration: const Duration(milliseconds: 100),
                             width: _sosProgress > 0 ? 140 : 150,

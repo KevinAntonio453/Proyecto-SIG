@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,7 +23,6 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
   bool _isLoading = true;
   String _gpsStatus = 'Obteniendo ubicación...';
   bool _isSatellite = false;
-  StreamSubscription? _serviceSubscription;
 
   @override
   void initState() {
@@ -34,28 +32,10 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
 
   Future<void> _inicializar() async {
     await _cargarZonas();
-    
-    // Suscribirse a las actualizaciones del servicio en segundo plano
-    final service = FlutterBackgroundService();
-    
-    _serviceSubscription = service.on('update').listen((event) {
-      if (mounted && event != null) {
-        final lat = event['latitude'] as double?;
-        final lng = event['longitude'] as double?;
-        if (lat != null && lng != null) {
-          setState(() {
-            _currentPosition = LatLng(lat, lng);
-            _gpsStatus = 'Ubicación en tiempo real activa';
-          });
-        }
-      }
-    });
 
-    service.invoke('queryStatus');
-    
-    // Obtener una coordenada inicial rápida
+    // Obtener ubicación actual directamente (permisos ya verificados por el dashboard)
     await _obtenerUbicacionActual();
-    
+
     if (mounted) {
       setState(() => _isLoading = false);
     }
@@ -63,58 +43,36 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
 
   Future<void> _obtenerUbicacionActual() async {
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        setState(() => _gpsStatus = 'Servicios de ubicación desactivados.');
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          setState(() => _gpsStatus = 'Permiso de ubicación denegado.');
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        setState(() => _gpsStatus = 'Permisos de ubicación denegados permanentemente.');
-        return;
-      }
-
+      // Los permisos ya fueron verificados por HijoDashboardScreen.
+      // Solo obtenemos la posición actual.
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 5),
       );
-      setState(() {
-        _currentPosition = LatLng(position.latitude, position.longitude);
-        _gpsStatus = 'Ubicación obtenida con éxito';
-      });
+      if (mounted) {
+        setState(() {
+          _currentPosition = LatLng(position.latitude, position.longitude);
+          _gpsStatus = 'Ubicación obtenida con éxito';
+        });
+      }
     } catch (e) {
-      setState(() => _gpsStatus = 'Error al obtener ubicación: $e');
+      if (mounted) {
+        setState(() => _gpsStatus = 'Error al obtener ubicación: $e');
+      }
     }
   }
 
   Future<void> _cargarZonas() async {
     try {
       final zonas = await _zonasService.getZonas();
-      setState(() => _zonas = zonas);
+      if (mounted) setState(() => _zonas = zonas);
     } catch (e) {
       debugPrint('Error al cargar zonas: $e');
     }
   }
 
   @override
-  void dispose() {
-    _serviceSubscription?.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     final polygons = _zonas.map<Polygon<Object>>((zona) {
       return Polygon(
         points: zona.puntos,
@@ -168,7 +126,7 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: _isSatellite 
+                      urlTemplate: _isSatellite
                           ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                           : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safesteps',
@@ -189,9 +147,7 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
                     backgroundColor: Colors.white,
                     foregroundColor: AppTheme.primaryTeal,
                     onPressed: () {
-                      setState(() {
-                        _isSatellite = !_isSatellite;
-                      });
+                      setState(() => _isSatellite = !_isSatellite);
                     },
                     child: Icon(_isSatellite ? Icons.map_outlined : Icons.layers_outlined),
                   ),

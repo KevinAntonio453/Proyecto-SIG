@@ -4,10 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/theme.dart';
 import 'core/constants/app_constants.dart';
 import 'core/services/auth_service.dart';
-import 'core/services/background_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/api_client.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
+import 'core/services/socket_service.dart';
 import 'features/auth/welcome_screen.dart';
 import 'features/tutor/dashboard_screen.dart';
 import 'features/hijo/dashboard_screen.dart';
@@ -24,9 +23,6 @@ void main() async {
     // Inicializar Firebase y Notificaciones Push (FCM)
     await FcmService.initialize();
 
-    // Inicializar configuraciones del servicio en segundo plano
-    await initializeBackgroundService();
-
     // --- Validar sesión almacenada ANTES de decidir la pantalla inicial ---
     final authService = AuthService();
     dynamic currentUser;
@@ -42,14 +38,6 @@ void main() async {
         if (!tokenValid) {
           print('⚠️ [main] Token JWT expirado. Limpiando sesión local.');
           await authService.logout();
-          // Detener servicio de ubicación si estaba corriendo
-          try {
-            final service = FlutterBackgroundService();
-            final isRunning = await service.isRunning();
-            if (isRunning) {
-              service.invoke('stopService');
-            }
-          } catch (_) {}
           currentUser = null;
           userType = null;
         }
@@ -69,12 +57,11 @@ void main() async {
       if (isHandlingUnauthorized) return;
       isHandlingUnauthorized = true;
 
+      // Desconectar socket si estaba conectado
       try {
-        final bgService = FlutterBackgroundService();
-        final isRunning = await bgService.isRunning();
-        if (isRunning) {
-          bgService.invoke('stopService');
-        }
+        final socketService = SocketService();
+        socketService.marcarOffline();
+        socketService.disconnect();
       } catch (_) {}
 
       scaffoldMessengerKey.currentState?.showSnackBar(
