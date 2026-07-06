@@ -139,7 +139,7 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
                           : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safesteps',
                       maxZoom: 20,
-                      maxNativeZoom: 18,
+                      maxNativeZoom: _isSatellite ? 17 : 19,
                     ),
                     PolygonLayer(polygons: polygons),
                     MarkerLayer(markers: markers),

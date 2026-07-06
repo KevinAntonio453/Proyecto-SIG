@@ -218,7 +218,7 @@ class _ZoneEditorScreenState extends State<ZoneEditorScreen> {
                                   : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                               userAgentPackageName: 'com.safesteps.safesteps',
                               maxZoom: 20,
-                              maxNativeZoom: 18,
+                              maxNativeZoom: _isSatellite ? 17 : 19,
                             ),
                             if (_puntosPoligono.length >= 3)
                               PolygonLayer(

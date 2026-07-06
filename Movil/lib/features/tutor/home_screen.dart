@@ -342,7 +342,7 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
                           : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.safesteps.safesteps',
                       maxZoom: 20,
-                      maxNativeZoom: 18,
+                      maxNativeZoom: _isSatellite ? 17 : 19,
                     ),
                     PolygonLayer(polygons: polygons),
                     if (_mostrarRuta && _historialRuta.isNotEmpty)
