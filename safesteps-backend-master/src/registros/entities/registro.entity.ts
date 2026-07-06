@@ -15,7 +15,7 @@ export class Registro {
   @Column('double precision', { name: 'longitud' })
   longitud: number;
 
-  @ManyToOne(() => Hijo, hijo => hijo.id)
+  @ManyToOne(() => Hijo, hijo => hijo.id, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'hijoId' })
   hijo: Hijo;
 

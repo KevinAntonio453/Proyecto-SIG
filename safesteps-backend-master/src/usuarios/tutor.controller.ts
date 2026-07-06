@@ -61,11 +61,6 @@ export class TutorController {
     return this.tutorService.getHijos(user.id);
   }
 
-  @Get()
-  findAll() {
-    return this.tutorService.findAll();
-  }
-
   @Get(':id')
   findOne(@Param('id') id: string, @GetUser() user: User) {
     if (user.id !== +id) {
