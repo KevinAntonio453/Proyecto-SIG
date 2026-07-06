@@ -280,6 +280,7 @@ class _ZonesListScreenState extends State<ZonesListScreen> {
                                                   options: MapOptions(
                                                     initialCenter: center,
                                                     initialZoom: 15.0,
+                                                    maxZoom: _isSatellite ? 17.0 : 19.0,
                                                     interactionOptions: const InteractionOptions(flags: 0),
                                                   ),
                                                   children: [

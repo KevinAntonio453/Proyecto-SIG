@@ -334,6 +334,7 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
                         ? LatLng(_hijoSeleccionado!.latitud!, _hijoSeleccionado!.longitud!)
                         : const LatLng(-17.7846, -63.1806),
                     initialZoom: 14.0,
+                    maxZoom: _isSatellite ? 17.0 : 19.0,
                   ),
                   children: [
                     TileLayer(

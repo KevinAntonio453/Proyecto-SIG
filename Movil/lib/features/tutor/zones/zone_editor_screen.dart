@@ -209,6 +209,7 @@ class _ZoneEditorScreenState extends State<ZoneEditorScreen> {
                           options: MapOptions(
                             initialCenter: const LatLng(-17.7846, -63.1806),
                             initialZoom: 14.5,
+                            maxZoom: _isSatellite ? 17.0 : 19.0,
                             onTap: _agregarPunto,
                           ),
                           children: [

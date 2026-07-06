@@ -131,6 +131,7 @@ class _HijoLocationScreenState extends State<HijoLocationScreen> {
                   options: MapOptions(
                     initialCenter: _currentPosition ?? const LatLng(-17.7846, -63.1806),
                     initialZoom: 15.0,
+                    maxZoom: _isSatellite ? 17.0 : 19.0,
                   ),
                   children: [
                     TileLayer(

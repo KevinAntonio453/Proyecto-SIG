@@ -309,13 +309,14 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
           : Stack(
               children: [
                 // 1. Capa de Mapa con flutter_map
-                FlutterMap(
+                 FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
                     initialCenter: _hijoSeleccionado?.latitud != null 
                         ? LatLng(_hijoSeleccionado!.latitud!, _hijoSeleccionado!.longitud!)
                         : const LatLng(-17.7846, -63.1806), // Santa Cruz, Bolivia por defecto
                     initialZoom: 14.0,
+                    maxZoom: _isSatellite ? 17.0 : 19.0,
                   ),
                   children: [
                     TileLayer(
