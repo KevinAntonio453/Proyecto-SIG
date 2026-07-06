@@ -13,6 +13,8 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Hijo } from '../usuarios/entities/hijo.entity';
+import { HijoService } from '../usuarios/hijo.service';
+import { Inject, forwardRef } from '@nestjs/common';
 
 @WebSocketGateway({
     cors: {
@@ -30,6 +32,8 @@ export class UbicacionGateway implements OnGatewayConnection, OnGatewayDisconnec
         private configService: ConfigService,
         @InjectRepository(Hijo)
         private hijoRepository: Repository<Hijo>,
+        @Inject(forwardRef(() => HijoService))
+        private hijoService: HijoService,
     ) { }
 
     async handleConnection(client: Socket) {
@@ -288,7 +292,7 @@ export class UbicacionGateway implements OnGatewayConnection, OnGatewayDisconnec
         const childId = String(user.sub);
         const room = `hijo_${childId}`;
 
-        // Emitir alerta a todos los tutores en la sala
+        // Emitir alerta a todos los tutores en la sala (broadcast en vivo por WS)
         this.server.to(room).emit('panicAlert', {
             childId: childId,
             lat: data.lat,
@@ -298,6 +302,18 @@ export class UbicacionGateway implements OnGatewayConnection, OnGatewayDisconnec
         
         console.log(`🚨 ALERTA DE PÁNICO del hijo ${childId}: ${data.lat}, ${data.lng}`);
 
-        // TODO: Guardar alerta en base de datos y/o enviar notificación push
+        // Actualizar coordenadas en BD y persistir/enviar SOS por notificaciones push
+        try {
+            await this.hijoRepository.update(childId, {
+                latitud: data.lat,
+                longitud: data.lng,
+                ultimaconexion: new Date(),
+            });
+
+            await this.hijoService.enviarAlertaSOS(user.sub, user.sub);
+            console.log(`✅ Alerta de pánico persistida y notificaciones push despachadas para hijo ${childId}`);
+        } catch (e) {
+            console.error('Error al persistir y notificar SOS:', e.message);
+        }
     }
 }

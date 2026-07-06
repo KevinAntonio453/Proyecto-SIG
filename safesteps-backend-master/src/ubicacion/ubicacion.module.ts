@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { UbicacionGateway } from './ubicacion.gateway';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Hijo } from '../usuarios/entities/hijo.entity';
+import { UsuariosModule } from '../usuarios/usuarios.module';
 
 @Module({
     imports: [
@@ -17,6 +18,7 @@ import { Hijo } from '../usuarios/entities/hijo.entity';
             inject: [ConfigService],
         }),
         TypeOrmModule.forFeature([Hijo]),
+        forwardRef(() => UsuariosModule),
     ],
     providers: [UbicacionGateway],
     exports: [UbicacionGateway],
