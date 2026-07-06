@@ -56,15 +56,10 @@ Se analizaron **todos los archivos** del proyecto. Este reporte está organizado
 
 ---
 
-### 9. SOS del WebSocket no se persiste ni envía push (Backend)
-El handler `panicAlert` en el gateway solo hace broadcast por WebSocket. Hay un **TODO literal** en el código:
-```typescript
-// TODO: Guardar alerta en base de datos y/o enviar notificación push
-```
-Si el tutor no tiene la app abierta cuando el niño presiona SOS, **no se entera**.
-
-> [!WARNING]
-> El SOS por HTTP (endpoint `/hijos/:id/sos`) SÍ persiste y envía push. Pero si el WebSocket falla primero, el flujo puede ser inconsistente.
+### 9. ✅ [RESUELTO] SOS del WebSocket no se persiste ni envía push (Backend)
+*   **Solución**: Se integró `UsuariosModule` y se inyectó `HijoService` dentro de `UbicacionGateway` usando `forwardRef`. Al recibirse el evento `panicAlert` por WebSockets, el gateway:
+    1.  Actualiza las coordenadas actuales del hijo en la base de datos de PostgreSQL de forma síncrona.
+    2.  Invoca `enviarAlertaSOS()` de `HijoService`, la cual persiste la alerta de pánico en la tabla de notificaciones de cada tutor asociado (`tipo: 'sos_panico'`) y despacha la notificación push de alta prioridad a través del SDK Admin de Firebase.
 
 ---
 
@@ -173,7 +168,7 @@ No hay throttling en ningún endpoint. Los endpoints sin auth (`verificar-codigo
 | Severidad | Total Inicial | Resueltos | Pendientes |
 |-----------|---------------|-----------|------------|
 | 🔴 Crítico | 6 | 5 | 1 |
-| 🟠 Mayor | 6 | 1 | 5 |
+| 🟠 Mayor | 6 | 2 | 4 |
 | 🟡 Moderado | 8 | 2 | 6 |
 | 🟢 Menor | 13 | 0 | 13 |
-| **Total** | **33** | **8** | **25** |
+| **Total** | **33** | **9** | **24** |
