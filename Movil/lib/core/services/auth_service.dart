@@ -134,4 +134,42 @@ class AuthService {
     await prefs.remove('user_data');
     await prefs.remove('user_type');
   }
+
+  /// Verifica si el JWT almacenado sigue siendo válido (no expirado).
+  /// Decodifica el payload del token localmente sin hacer llamadas de red.
+  Future<bool> isTokenValid() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+    if (token == null) return false;
+
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return false;
+
+      // Decodificar el payload (segunda parte del JWT)
+      String payload = parts[1];
+      // Agregar padding base64 si es necesario
+      switch (payload.length % 4) {
+        case 2:
+          payload += '==';
+          break;
+        case 3:
+          payload += '=';
+          break;
+      }
+      final decoded = utf8.decode(base64Url.decode(payload));
+      final Map<String, dynamic> data = jsonDecode(decoded) as Map<String, dynamic>;
+
+      // Verificar expiración
+      final exp = data['exp'] as int?;
+      if (exp == null) return false;
+
+      final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      // Considerar inválido si expira en menos de 30 segundos
+      return DateTime.now().isBefore(expirationDate.subtract(const Duration(seconds: 30)));
+    } catch (e) {
+      print('⚠️ [AuthService] Error validando token JWT: $e');
+      return false;
+    }
+  }
 }

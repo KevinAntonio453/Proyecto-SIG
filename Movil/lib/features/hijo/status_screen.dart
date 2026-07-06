@@ -37,66 +37,76 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
   }
 
   Future<void> _inicializarServicios() async {
-    // 1. Obtener datos del usuario logueado
-    final user = await _authService.getCurrentUser();
-    if (mounted) {
+    try {
+      // 1. Obtener datos del usuario logueado
+      final user = await _authService.getCurrentUser();
+      if (!mounted) return;
       setState(() {
         _currentUser = user;
       });
-    }
 
-    // 2. Inicializar GPS y levantar servicio si es necesario
-    await _iniciarGps();
+      // 2. Inicializar GPS y levantar servicio si es necesario
+      await _iniciarGps();
+      if (!mounted) return;
 
-    // 3. Suscribirse a los eventos del servicio en segundo plano
-    final service = FlutterBackgroundService();
+      // 3. Suscribirse a los eventos del servicio en segundo plano
+      final service = FlutterBackgroundService();
 
-    _serviceSubscription = service.on('update').listen((event) {
-      if (mounted && event != null) {
-        setState(() {
-          final lat = event['latitude'] as double?;
-          final lng = event['longitude'] as double?;
-          if (lat != null && lng != null) {
-            _currentPosition = Position(
-              latitude: lat,
-              longitude: lng,
-              timestamp: DateTime.now(),
-              accuracy: 0.0,
-              altitude: 0.0,
-              altitudeAccuracy: 0.0,
-              heading: 0.0,
-              headingAccuracy: 0.0,
-              speed: 0.0,
-              speedAccuracy: 0.0,
-            );
-          }
-          _gpsStatus = event['gpsStatus'] as String? ?? 'GPS Activo';
-        });
-      }
-    });
-
-    service.on('status').listen((event) {
-      if (mounted && event != null) {
-        setState(() {
-          _isConnected = event['isConnected'] as bool? ?? false;
-        });
-      }
-    });
-
-    service.on('sosSent').listen((event) {
-      if (mounted && event != null) {
-        final success = event['success'] as bool? ?? false;
-        if (success) {
-          _showSosSuccessDialog();
-        } else {
-          final error = event['error'] as String? ?? 'Error desconocido';
-          _showSosErrorSnackBar(error);
+      _serviceSubscription = service.on('update').listen((event) {
+        if (mounted && event != null) {
+          setState(() {
+            final lat = event['latitude'] as double?;
+            final lng = event['longitude'] as double?;
+            if (lat != null && lng != null) {
+              _currentPosition = Position(
+                latitude: lat,
+                longitude: lng,
+                timestamp: DateTime.now(),
+                accuracy: 0.0,
+                altitude: 0.0,
+                altitudeAccuracy: 0.0,
+                heading: 0.0,
+                headingAccuracy: 0.0,
+                speed: 0.0,
+                speedAccuracy: 0.0,
+              );
+            }
+            _gpsStatus = event['gpsStatus'] as String? ?? 'GPS Activo';
+          });
         }
-      }
-    });
+      });
 
-    // Consultar estado actual inicial
-    service.invoke('queryStatus');
+      service.on('status').listen((event) {
+        if (mounted && event != null) {
+          setState(() {
+            _isConnected = event['isConnected'] as bool? ?? false;
+          });
+        }
+      });
+
+      service.on('sosSent').listen((event) {
+        if (mounted && event != null) {
+          final success = event['success'] as bool? ?? false;
+          if (success) {
+            _showSosSuccessDialog();
+          } else {
+            final error = event['error'] as String? ?? 'Error desconocido';
+            _showSosErrorSnackBar(error);
+          }
+        }
+      });
+
+      // Consultar estado actual inicial
+      service.invoke('queryStatus');
+    } catch (e) {
+      print('❌ [HijoStatusScreen] Error al inicializar servicios: $e');
+      // No crashear - simplemente mostrar estado degradado
+      if (mounted) {
+        setState(() {
+          _gpsStatus = 'Error al inicializar. Reinicia la app.';
+        });
+      }
+    }
   }
 
   Future<void> _iniciarGps() async {

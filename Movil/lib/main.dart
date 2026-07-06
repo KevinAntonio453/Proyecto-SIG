@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/theme.dart';
@@ -15,50 +16,115 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
-  // Asegurar la inicialización de bindings asíncronos en Flutter
-  WidgetsFlutterBinding.ensureInitialized();
+  // Zona de seguridad global: atrapa CUALQUIER error async no capturado
+  // para que la app nunca se cierre sin razón visible.
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializar Firebase y Notificaciones Push (FCM)
-  await FcmService.initialize();
+    // Inicializar Firebase y Notificaciones Push (FCM)
+    await FcmService.initialize();
 
-  // Inicializar configuraciones del servicio en segundo plano
-  await initializeBackgroundService();
+    // Inicializar configuraciones del servicio en segundo plano
+    await initializeBackgroundService();
 
-  // Configurar interceptor global de sesión expirada (401)
-  ApiClient.onUnauthorized = () async {
-    try {
-      final service = FlutterBackgroundService();
-      final isRunning = await service.isRunning();
-      if (isRunning) {
-        service.invoke('stopService');
+    // --- Validar sesión almacenada ANTES de decidir la pantalla inicial ---
+    final authService = AuthService();
+    var currentUser = await authService.getCurrentUser();
+    var userType = await authService.getUserType();
+
+    // Si hay sesión guardada, verificar que el token JWT no haya expirado
+    if (currentUser != null) {
+      final tokenValid = await authService.isTokenValid();
+      if (!tokenValid) {
+        print('⚠️ [main] Token JWT expirado. Limpiando sesión local.');
+        await authService.logout();
+        // Detener servicio de ubicación si estaba corriendo
+        try {
+          final service = FlutterBackgroundService();
+          final isRunning = await service.isRunning();
+          if (isRunning) {
+            service.invoke('stopService');
+          }
+        } catch (_) {}
+        currentUser = null;
+        userType = null;
       }
-    } catch (_) {}
+    }
 
-    scaffoldMessengerKey.currentState?.showSnackBar(
-      const SnackBar(
-        content: Text('Sesión expirada. Por favor, inicia sesión de nuevo.'),
-        backgroundColor: Colors.redAccent,
-        duration: Duration(seconds: 4),
+    // Configurar interceptor global de sesión expirada (401) con debounce
+    bool isHandlingUnauthorized = false;
+
+    ApiClient.onUnauthorized = () async {
+      // Evitar que se dispare múltiples veces simultáneamente
+      if (isHandlingUnauthorized) return;
+      isHandlingUnauthorized = true;
+
+      try {
+        final bgService = FlutterBackgroundService();
+        final isRunning = await bgService.isRunning();
+        if (isRunning) {
+          bgService.invoke('stopService');
+        }
+      } catch (_) {}
+
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(
+          content: Text('Sesión expirada. Por favor, inicia sesión de nuevo.'),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 4),
+        ),
+      );
+
+      // Esperar un frame para que el árbol de widgets esté estable
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+          (route) => false,
+        );
+        // Permitir volver a disparar después de 3 segundos
+        Future.delayed(const Duration(seconds: 3), () {
+          isHandlingUnauthorized = false;
+        });
+      });
+    };
+
+    runApp(
+      ProviderScope(
+        child: MyApp(
+          initialScreen: _getInitialScreen(currentUser, userType),
+        ),
       ),
     );
+  }, (error, stack) {
+    // Red de seguridad: loggear errores globales no capturados sin cerrar la app
+    print('❌ [Global] Error no capturado: $error');
+    print(stack);
+  });
+}
 
-    navigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-      (route) => false,
+// Captura errores de Flutter (rendering, layout, etc.)
+class MyApp extends StatelessWidget {
+  final Widget initialScreen;
+
+  const MyApp({super.key, required this.initialScreen});
+
+  @override
+  Widget build(BuildContext context) {
+    // Sobreescribir el manejador de errores de Flutter para evitar crashes visuales
+    FlutterError.onError = (FlutterErrorDetails details) {
+      print('❌ [FlutterError] ${details.exceptionAsString()}');
+      print(details.stack);
+    };
+
+    return MaterialApp(
+      title: AppConstants.appName,
+      theme: AppTheme.lightTheme,
+      debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: scaffoldMessengerKey,
+      home: initialScreen,
     );
-  };
-  
-  final authService = AuthService();
-  final currentUser = await authService.getCurrentUser();
-  final userType = await authService.getUserType();
-  
-  runApp(
-    ProviderScope(
-      child: MyApp(
-        initialScreen: _getInitialScreen(currentUser, userType),
-      ),
-    ),
-  );
+  }
 }
 
 Widget _getInitialScreen(dynamic user, String? type) {
@@ -69,22 +135,4 @@ Widget _getInitialScreen(dynamic user, String? type) {
     return const HijoDashboardScreen();
   }
   return const TutorDashboardScreen();
-}
-
-class MyApp extends StatelessWidget {
-  final Widget initialScreen;
-
-  const MyApp({super.key, required this.initialScreen});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppConstants.appName,
-      theme: AppTheme.lightTheme,
-      debugShowCheckedModeBanner: false,
-      navigatorKey: navigatorKey,
-      scaffoldMessengerKey: scaffoldMessengerKey,
-      home: initialScreen,
-    );
-  }
 }
