@@ -68,4 +68,12 @@ class HijosService {
       throw Exception(error['message'] ?? 'Error al actualizar la ubicación');
     }
   }
+  // Desvincular/Eliminar un hijo del tutor actual
+  Future<void> desvincularHijo(int tutorId, int hijoId) async {
+    final response = await _apiClient.delete('/tutores/$tutorId/hijos/$hijoId');
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Error al desvincular el hijo');
+    }
+  }
 }

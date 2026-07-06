@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../app/theme.dart';
 import '../../../core/models/hijo.dart';
 import '../../../core/services/hijos_service.dart';
+import '../../../core/services/auth_service.dart';
 import 'register_child_screen.dart';
 
 class ManageChildrenScreen extends StatefulWidget {
@@ -59,6 +60,59 @@ class _ManageChildrenScreenState extends State<ManageChildrenScreen> {
         backgroundColor: AppTheme.primaryTeal,
       ),
     );
+  }
+
+  Future<void> _eliminarHijo(Hijo hijo) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar Integrante'),
+        content: Text('¿Estás seguro de que quieres desvincular a ${hijo.nombre}? Perderás el acceso a su ubicación e historial.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.colorDanger),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      if (!mounted) return;
+      setState(() => _isLoading = true);
+      try {
+        final authService = AuthService();
+        final user = await authService.getCurrentUser();
+        if (user != null) {
+          await _hijosService.desvincularHijo(user.id, hijo.id);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Integrante eliminado exitosamente.'),
+              backgroundColor: AppTheme.colorSafe,
+            ),
+          );
+          _cargarHijos();
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = e.toString().replaceFirst('Exception: ', '');
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_errorMessage),
+              backgroundColor: AppTheme.colorDanger,
+            ),
+          );
+        }
+      }
+    }
   }
 
 
@@ -213,6 +267,12 @@ class _ManageChildrenScreenState extends State<ManageChildrenScreen> {
                                               ],
                                             ),
                                           ),
+                                          // Botón de eliminar (Icono de papelera)
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, color: AppTheme.colorDanger),
+                                            onPressed: () => _eliminarHijo(hijo),
+                                            tooltip: 'Eliminar familiar',
+                                          ),
                                         ],
                                       ),
                                       const SizedBox(height: 16),
@@ -321,6 +381,12 @@ class _ManageChildrenScreenState extends State<ManageChildrenScreen> {
                                                 ),
                                               ],
                                             ),
+                                          ),
+                                          // Botón de eliminar (Icono de papelera) para pendientes
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, color: AppTheme.colorDanger),
+                                            onPressed: () => _eliminarHijo(hijo),
+                                            tooltip: 'Eliminar familiar',
                                           ),
                                         ],
                                       ),
