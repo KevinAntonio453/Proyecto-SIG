@@ -120,6 +120,7 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
       return;
     }
 
+    // 1. Solicitar permisos de ubicación en primer plano (Mientras la app está en uso)
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -131,15 +132,51 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
     
     if (permission == LocationPermission.deniedForever) {
       if (mounted) setState(() => _gpsStatus = 'Permisos de ubicación denegados permanentemente.');
+      // En este caso, deberíamos redirigir a los ajustes de la app.
+      await Geolocator.openAppSettings();
       return;
     }
 
-    // Si los permisos están otorgados, arrancar el servicio en segundo plano si no está corriendo
+    // 2. Solicitar permiso de ubicación en segundo plano (Todo el tiempo) - Android 10+
+    if (permission == LocationPermission.whileInUse) {
+      bool dialogShown = false;
+      if (mounted) {
+        dialogShown = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Permiso en segundo plano requerido'),
+            content: const Text(
+                'SafeSteps necesita acceder a tu ubicación "Todo el tiempo" para poder actualizar '
+                'tu posición a tus tutores incluso cuando cierras la aplicación o bloqueas la pantalla.\n\n'
+                'En la siguiente pantalla de ajustes de Android, por favor selecciona "Permitir siempre".'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Ir a Ajustes'),
+              ),
+            ],
+          ),
+        ) ?? false;
+      }
+
+      if (dialogShown) {
+        // Redirige al usuario a la configuración de ubicación "Allow all the time"
+        await Geolocator.openAppSettings();
+      }
+    }
+
+    // 3. Si llegamos aquí y el servicio de segundo plano no está corriendo, iniciarlo.
     final service = FlutterBackgroundService();
     final isRunning = await service.isRunning();
     if (!isRunning) {
       await service.startService();
     }
+
     service.invoke('queryStatus');
   }
 
