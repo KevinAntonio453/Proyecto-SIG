@@ -131,53 +131,66 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
     }
     
     if (permission == LocationPermission.deniedForever) {
-      if (mounted) setState(() => _gpsStatus = 'Permisos de ubicación denegados permanentemente.');
-      // En este caso, deberíamos redirigir a los ajustes de la app.
+      if (mounted) setState(() => _gpsStatus = 'Permisos de ubicación denegados permanentemente. Abrí los ajustes para habilitarlos.');
       await Geolocator.openAppSettings();
       return;
     }
 
-    // 2. Solicitar permiso de ubicación en segundo plano (Todo el tiempo) - Android 10+
+    // 2. Si solo tiene "Mientras la app está en uso", pedir "Permitir siempre"
+    //    CRÍTICO: NO arrancar el servicio con solo whileInUse.
+    //    En Android 14+ (API 34) iniciar un ForegroundService con tipo "location"
+    //    sin ACCESS_BACKGROUND_LOCATION causa un SecurityException FATAL.
     if (permission == LocationPermission.whileInUse) {
-      bool dialogShown = false;
       if (mounted) {
-        dialogShown = await showDialog<bool>(
+        final goToSettings = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
+          builder: (ctx) => AlertDialog(
             title: const Text('Permiso en segundo plano requerido'),
             content: const Text(
-                'SafeSteps necesita acceder a tu ubicación "Todo el tiempo" para poder actualizar '
-                'tu posición a tus tutores incluso cuando cierras la aplicación o bloqueas la pantalla.\n\n'
-                'En la siguiente pantalla de ajustes de Android, por favor selecciona "Permitir siempre".'),
+                'SafeSteps necesita acceder a tu ubicación "Todo el tiempo" para poder '
+                'actualizar tu posición a tus tutores incluso cuando cerrás la aplicación '
+                'o bloqueás la pantalla.\n\n'
+                'En la siguiente pantalla de ajustes, seleccioná "Permitir siempre".'),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('Ir a Ajustes'),
               ),
             ],
           ),
         ) ?? false;
-      }
 
-      if (dialogShown) {
-        // Redirige al usuario a la configuración de ubicación "Allow all the time"
-        await Geolocator.openAppSettings();
+        if (goToSettings) {
+          await Geolocator.openAppSettings();
+        }
+
+        setState(() => _gpsStatus = 'Esperando permiso "Permitir siempre"...');
       }
+      // NO arrancar el servicio. El usuario debe volver a abrir la app
+      // después de conceder el permiso en los ajustes de Android.
+      return;
     }
 
-    // 3. Si llegamos aquí y el servicio de segundo plano no está corriendo, iniciarlo.
-    final service = FlutterBackgroundService();
-    final isRunning = await service.isRunning();
-    if (!isRunning) {
-      await service.startService();
+    // 3. Solo llegamos aquí si permission == LocationPermission.always
+    //    Ahora es SEGURO arrancar el servicio de ubicación en segundo plano.
+    try {
+      final service = FlutterBackgroundService();
+      final isRunning = await service.isRunning();
+      if (!isRunning) {
+        await service.startService();
+      }
+      service.invoke('queryStatus');
+    } catch (e) {
+      print('❌ [HijoStatusScreen] Error al iniciar servicio de ubicación: $e');
+      if (mounted) {
+        setState(() => _gpsStatus = 'Error al iniciar el servicio de ubicación.');
+      }
     }
-
-    service.invoke('queryStatus');
   }
 
   // --- CONTROL DEL BOTÓN SOS ---
