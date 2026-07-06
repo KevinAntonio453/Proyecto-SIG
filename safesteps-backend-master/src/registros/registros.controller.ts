@@ -1,4 +1,3 @@
-// src/registros/registros.controller.ts
 import { 
   Controller, 
   Get, 
@@ -8,14 +7,17 @@ import {
   Param, 
   Delete, 
   Query,
-  ParseIntPipe 
+  ParseIntPipe,
+  UseGuards
 } from '@nestjs/common';
 import { RegistrosService } from './registros.service';
 import { CreateRegistroDto } from './dto/create-registro.dto';
 import { UpdateRegistroDto, SyncRegistrosBatchDto } from './dto/update-registro.dto';
 import { Registro } from './entities/registro.entity';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('hijos/:hijoId/registros')
+@UseGuards(JwtAuthGuard)
 export class RegistrosController {
   constructor(private readonly registrosService: RegistrosService) {}
 
