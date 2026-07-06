@@ -63,6 +63,7 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
             _seleccionarHijo(_hijos.first);
           }
         });
+        _suscribirseAHijos(); // Suscribirse una vez que se cargan los hijos
       }
     } catch (e) {
       if (mounted) {
@@ -76,10 +77,7 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
   void _configurarWebSockets() {
     // Conectar WebSocket si no está conectado
     _socketService.connect().then((_) {
-      // Suscribirse a las salas de todos los hijos para escuchar sus ubicaciones
-      for (var hijo in _hijos) {
-        _socketService.suscribirseAHijo(hijo.id);
-      }
+      _suscribirseAHijos(); // Suscribirse una vez conectado
     });
 
     // Escuchar actualizaciones de ubicación en tiempo real
@@ -88,11 +86,18 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
     _socketService.registerStatusCallback(_onStatusChanged);
   }
 
+  void _suscribirseAHijos() {
+    if (_socketService.isConnected) {
+      for (var hijo in _hijos) {
+        _socketService.suscribirseAHijo(hijo.id);
+      }
+    }
+  }
+
   void _onLocationUpdated(Map<String, dynamic> data) {
     if (!mounted) return;
     
-    final childIdStr = data['childId'] as String;
-    final childId = int.parse(childIdStr);
+    final childId = int.tryParse(data['childId'].toString()) ?? 0;
     final double lat = (data['lat'] as num).toDouble();
     final double lng = (data['lng'] as num).toDouble();
 
@@ -133,7 +138,7 @@ class _TutorMapScreenState extends State<TutorMapScreen> {
 
   void _onStatusChanged(Map<String, dynamic> data) {
     if (!mounted) return;
-    final childId = int.parse(data['childId'] as String);
+    final childId = int.tryParse(data['childId'].toString()) ?? 0;
     final bool online = data['online'] as bool? ?? false;
 
     setState(() {

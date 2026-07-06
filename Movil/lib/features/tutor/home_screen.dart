@@ -65,6 +65,7 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
             _seleccionarHijo(_hijos.first);
           }
         });
+        _suscribirseAHijos(); // Suscribirse una vez que se cargan los hijos
       }
     } catch (e) {
       if (mounted) {
@@ -77,20 +78,25 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
 
   void _configurarWebSockets() {
     _socketService.connect().then((_) {
-      for (var hijo in _hijos) {
-        _socketService.suscribirseAHijo(hijo.id);
-      }
+      _suscribirseAHijos(); // Suscribirse una vez conectado
     });
 
     _socketService.registerLocationCallback(_onLocationUpdated);
     _socketService.registerStatusCallback(_onStatusChanged);
   }
 
+  void _suscribirseAHijos() {
+    if (_socketService.isConnected) {
+      for (var hijo in _hijos) {
+        _socketService.suscribirseAHijo(hijo.id);
+      }
+    }
+  }
+
   void _onLocationUpdated(Map<String, dynamic> data) {
     if (!mounted) return;
     
-    final childIdStr = data['childId'] as String;
-    final childId = int.parse(childIdStr);
+    final childId = int.tryParse(data['childId'].toString()) ?? 0;
     final double lat = (data['lat'] as num).toDouble();
     final double lng = (data['lng'] as num).toDouble();
 
@@ -128,7 +134,7 @@ class _TutorHomeScreenState extends State<TutorHomeScreen> {
 
   void _onStatusChanged(Map<String, dynamic> data) {
     if (!mounted) return;
-    final childId = int.parse(data['childId'] as String);
+    final childId = int.tryParse(data['childId'].toString()) ?? 0;
     final bool online = data['online'] as bool? ?? false;
 
     setState(() {
