@@ -21,19 +21,11 @@ Se analizaron **todos los archivos** del proyecto. Este reporte está organizado
 
 ---
 
-### 4. No hay autorización, solo autenticación (Backend)
-La mayoría de endpoints verifican que el usuario está logueado, pero **NO** verifican que tenga relación o permiso sobre la entidad consultada:
-
-| Endpoint | Riesgo |
-|----------|--------|
-| `GET /tutores/:id/hijos` | Cualquier usuario ve los hijos de CUALQUIER tutor |
-| `GET /hijos/:id` | Cualquier usuario ve datos de CUALQUIER niño |
-| `PATCH /hijos/:id` | Cualquier usuario modifica CUALQUIER niño |
-| `DELETE /tutores/:id` | Cualquier usuario elimina CUALQUIER tutor |
-| WebSocket `joinChildRoom` | Cualquier usuario espía la ubicación de CUALQUIER niño |
-
-> [!CAUTION]
-> **Prioridad Alta**. En una app de seguridad infantil, esto es inaceptable. Un tutor autenticado no debe poder consultar ubicaciones de niños vinculados a otros tutores.
+### 4. ✅ [RESUELTO] No hay autorización, solo autenticación (Backend)
+*   **Solución**: Se implementó una política estricta de validación de pertenencia. 
+    1.  En `TutorController`, se verifica que el usuario autenticado coincida con el ID del tutor en la URL.
+    2.  En `HijoController`, se verifica que el usuario sea el propio hijo, o que el tutor que realiza la consulta esté formalmente vinculado al hijo a través del helper `belongsToTutor()`.
+    3.  En `UbicacionGateway` (WebSockets), los eventos `joinChildRoom` y `requestLocation` validan la relación tutor-hijo en la base de datos antes de permitir la suscripción al canal en tiempo real.
 
 ---
 
@@ -178,8 +170,8 @@ No hay throttling en ningún endpoint. Los endpoints sin auth (`verificar-codigo
 
 | Severidad | Total Inicial | Resueltos | Pendientes |
 |-----------|---------------|-----------|------------|
-| 🔴 Crítico | 6 | 3 | 3 |
+| 🔴 Crítico | 6 | 4 | 2 |
 | 🟠 Mayor | 6 | 1 | 5 |
 | 🟡 Moderado | 8 | 2 | 6 |
 | 🟢 Menor | 13 | 0 | 13 |
-| **Total** | **33** | **6** | **27** |
+| **Total** | **33** | **7** | **26** |
