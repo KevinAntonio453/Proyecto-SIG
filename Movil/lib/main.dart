@@ -4,6 +4,7 @@ import 'app/theme.dart';
 import 'core/constants/app_constants.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/background_service.dart';
+import 'core/services/fcm_service.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'features/auth/welcome_screen.dart';
 import 'features/tutor/dashboard_screen.dart';
@@ -12,6 +13,9 @@ import 'features/hijo/dashboard_screen.dart';
 void main() async {
   // Asegurar la inicialización de bindings asíncronos en Flutter
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar Firebase y Notificaciones Push (FCM)
+  await FcmService.initialize();
 
   // Inicializar configuraciones del servicio en segundo plano
   await initializeBackgroundService();

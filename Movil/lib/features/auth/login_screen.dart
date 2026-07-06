@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/fcm_service.dart';
 import '../tutor/dashboard_screen.dart';
 import '../hijo/status_screen.dart';
 
@@ -43,6 +44,11 @@ class _LoginScreenState extends State<LoginScreen> {
           backgroundColor: AppTheme.colorSafe,
         ),
       );
+
+      // Registrar el token FCM del dispositivo en el servidor para este usuario
+      await FcmService.updateTokenOnServer();
+
+      if (!mounted) return;
 
       // Redirigir según el tipo de usuario devuelto en el login
       if (user.tipo == 'hijo') {

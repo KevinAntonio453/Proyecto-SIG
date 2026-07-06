@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/fcm_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../hijo/dashboard_screen.dart'; // Pantalla home/dashboard del hijo
 
@@ -36,6 +37,11 @@ class _VincularScreenState extends State<VincularScreen> {
       
       if (!mounted) return;
       
+      // Registrar el token FCM del dispositivo en el servidor para el hijo
+      await FcmService.updateTokenOnServer();
+
+      if (!mounted) return;
+
       // Levantar el servicio en segundo plano para rastrear al hijo
       final service = FlutterBackgroundService();
       final isRunning = await service.isRunning();

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "835974124737",
+    "project_id": "proy-sig",
+    "storage_bucket": "proy-sig.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835974124737:android:45229b4e642dc790afb040",
+        "android_client_info": {
+          "package_name": "com.safesteps.safesteps"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSNFCAF5FMNiyX7xzD0Ys2FZq_IbOqZjQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
