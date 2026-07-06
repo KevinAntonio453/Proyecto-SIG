@@ -8,6 +8,9 @@ class ApiClient {
   factory ApiClient() => _instance;
   ApiClient._internal();
 
+  // Callback global que se disparará en caso de recibir un 401
+  static Function()? onUnauthorized;
+
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token');
@@ -27,37 +30,61 @@ class ApiClient {
     return headers;
   }
 
+  // Interceptor para verificar la validez del token en cada respuesta
+  http.Response _checkResponse(http.Response response) {
+    if (response.statusCode == 401) {
+      print('🔌 [ApiClient] Detectado error 401. Limpiando sesión local...');
+      // 1. Limpiar almacenamiento local
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.remove('access_token');
+        prefs.remove('user_data');
+        prefs.remove('user_type');
+      });
+
+      // 2. Disparar evento de deslogueo a la interfaz
+      if (onUnauthorized != null) {
+        onUnauthorized!();
+      }
+    }
+    return response;
+  }
+
   Future<http.Response> get(String path, {Map<String, String>? headers}) async {
     final token = await _getToken();
     final url = Uri.parse('${AppConstants.apiBaseUrl}$path');
-    return http.get(url, headers: _buildHeaders(token, headers));
+    final response = await http.get(url, headers: _buildHeaders(token, headers));
+    return _checkResponse(response);
   }
 
   Future<http.Response> post(String path, {dynamic body, Map<String, String>? headers}) async {
     final token = await _getToken();
     final url = Uri.parse('${AppConstants.apiBaseUrl}$path');
     final bodyStr = body != null ? jsonEncode(body) : null;
-    return http.post(url, body: bodyStr, headers: _buildHeaders(token, headers));
+    final response = await http.post(url, body: bodyStr, headers: _buildHeaders(token, headers));
+    return _checkResponse(response);
   }
 
   Future<http.Response> put(String path, {dynamic body, Map<String, String>? headers}) async {
     final token = await _getToken();
     final url = Uri.parse('${AppConstants.apiBaseUrl}$path');
     final bodyStr = body != null ? jsonEncode(body) : null;
-    return http.put(url, body: bodyStr, headers: _buildHeaders(token, headers));
+    final response = await http.put(url, body: bodyStr, headers: _buildHeaders(token, headers));
+    return _checkResponse(response);
   }
 
   Future<http.Response> patch(String path, {dynamic body, Map<String, String>? headers}) async {
     final token = await _getToken();
     final url = Uri.parse('${AppConstants.apiBaseUrl}$path');
     final bodyStr = body != null ? jsonEncode(body) : null;
-    return http.patch(url, body: bodyStr, headers: _buildHeaders(token, headers));
+    final response = await http.patch(url, body: bodyStr, headers: _buildHeaders(token, headers));
+    return _checkResponse(response);
   }
 
   Future<http.Response> delete(String path, {dynamic body, Map<String, String>? headers}) async {
     final token = await _getToken();
     final url = Uri.parse('${AppConstants.apiBaseUrl}$path');
     final bodyStr = body != null ? jsonEncode(body) : null;
-    return http.delete(url, body: bodyStr, headers: _buildHeaders(token, headers));
+    final response = await http.delete(url, body: bodyStr, headers: _buildHeaders(token, headers));
+    return _checkResponse(response);
   }
 }

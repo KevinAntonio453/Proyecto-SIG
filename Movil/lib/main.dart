@@ -5,10 +5,14 @@ import 'core/constants/app_constants.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/background_service.dart';
 import 'core/services/fcm_service.dart';
+import 'core/services/api_client.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'features/auth/welcome_screen.dart';
 import 'features/tutor/dashboard_screen.dart';
 import 'features/hijo/dashboard_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   // Asegurar la inicialización de bindings asíncronos en Flutter
@@ -19,6 +23,30 @@ void main() async {
 
   // Inicializar configuraciones del servicio en segundo plano
   await initializeBackgroundService();
+
+  // Configurar interceptor global de sesión expirada (401)
+  ApiClient.onUnauthorized = () async {
+    try {
+      final service = FlutterBackgroundService();
+      final isRunning = await service.isRunning();
+      if (isRunning) {
+        service.invoke('stopService');
+      }
+    } catch (_) {}
+
+    scaffoldMessengerKey.currentState?.showSnackBar(
+      const SnackBar(
+        content: Text('Sesión expirada. Por favor, inicia sesión de nuevo.'),
+        backgroundColor: Colors.redAccent,
+        duration: Duration(seconds: 4),
+      ),
+    );
+
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+      (route) => false,
+    );
+  };
   
   final authService = AuthService();
   final currentUser = await authService.getCurrentUser();
@@ -63,6 +91,8 @@ class MyApp extends StatelessWidget {
       title: AppConstants.appName,
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: scaffoldMessengerKey,
       home: initialScreen,
     );
   }

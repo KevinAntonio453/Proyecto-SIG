@@ -12,7 +12,7 @@ import { Hijo } from '../usuarios/entities/hijo.entity';
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => ({
                 secret: configService.get<string>('JWT_SECRET', 'your-secret-key'),
-                signOptions: { expiresIn: '7d' },
+                signOptions: { expiresIn: '365d' },
             }),
             inject: [ConfigService],
         }),
