@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:ui';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:battery_plus/battery_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'socket_service.dart';
 import 'registros_service.dart';
 import '../models/registro.dart';
@@ -100,9 +103,19 @@ void onStart(ServiceInstance service) async {
         timeLimit: const Duration(seconds: 5),
       );
       lastPosition = position;
+      
+      double batteryLevel = 100.0;
+      try {
+        final level = await Battery().batteryLevel;
+        batteryLevel = level.toDouble();
+      } catch (e) {
+        print('Error al obtener batería caliente: $e');
+      }
+
       socketService.enviarUbicacion(
         position.latitude,
         position.longitude,
+        battery: batteryLevel,
         status: 'requested',
       );
       service.invoke('update', {
@@ -143,23 +156,45 @@ void onStart(ServiceInstance service) async {
   ).listen((Position position) async {
     lastPosition = position;
 
-    // 1. Transmitir por WebSocket en tiempo real
-    socketService.enviarUbicacion(position.latitude, position.longitude);
+    double batteryLevel = 100.0;
+    try {
+      final level = await Battery().batteryLevel;
+      batteryLevel = level.toDouble();
+    } catch (e) {
+      print('Error al obtener batería: $e');
+    }
+
+    // 1. Transmitir por WebSocket en tiempo real con nivel de batería real
+    socketService.enviarUbicacion(
+      position.latitude, 
+      position.longitude,
+      battery: batteryLevel,
+    );
 
     // 2. Persistir en la base de datos vía API HTTP (Historial de Trayectorias)
     if (user != null) {
+      final registro = Registro(
+        hora: DateTime.now(),
+        latitud: position.latitude,
+        longitud: position.longitude,
+        hijoId: user.id,
+        fueOffline: false,
+      );
+
       try {
-        await registrosService.registrarUbicacion(
-          Registro(
-            hora: DateTime.now(),
-            latitud: position.latitude,
-            longitud: position.longitude,
-            hijoId: user.id,
-            fueOffline: false,
-          ),
-        );
+        await registrosService.registrarUbicacion(registro);
+        // Si tiene éxito, intentamos sincronizar cualquier registro offline acumulado
+        await _intentarSincronizarOffline(user.id, registrosService);
       } catch (e) {
-        print('🔌 [BackgroundService] Error al guardar registro HTTP: $e');
+        print('🔌 [BackgroundService] Error al guardar registro HTTP (guardando localmente): $e');
+        final registroOffline = Registro(
+          hora: registro.hora,
+          latitud: registro.latitud,
+          longitud: registro.longitud,
+          hijoId: registro.hijoId,
+          fueOffline: true,
+        );
+        await _guardarRegistroOffline(registroOffline);
       }
     }
 
@@ -189,7 +224,45 @@ void onStart(ServiceInstance service) async {
       socketService.marcarOnline();
       service.invoke('status', {'isConnected': socketService.isConnected});
     }
+
+    // Si hay usuario e internet, intentamos sincronizar registros offline pendientes
+    if (user != null && socketService.isConnected) {
+      await _intentarSincronizarOffline(user.id, registrosService);
+    }
   });
+}
+
+Future<void> _guardarRegistroOffline(Registro registro) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> offlineList = prefs.getStringList('offline_locations') ?? [];
+    offlineList.add(jsonEncode(registro.toJson()));
+    await prefs.setStringList('offline_locations', offlineList);
+    print('🔌 [BackgroundService] Guardado registro offline localmente. Total acumulado: ${offlineList.length}');
+  } catch (e) {
+    print('Error al guardar registro offline localmente: $e');
+  }
+}
+
+Future<void> _intentarSincronizarOffline(int hijoId, RegistrosService registrosService) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> offlineList = prefs.getStringList('offline_locations') ?? [];
+    if (offlineList.isEmpty) return;
+
+    print('🔌 [BackgroundService] Detectada conexión. Sincronizando ${offlineList.length} registros offline...');
+    final List<Registro> registros = offlineList.map((item) {
+      final json = jsonDecode(item) as Map<String, dynamic>;
+      json['hijoId'] = hijoId;
+      return Registro.fromJson(json);
+    }).toList();
+
+    await registrosService.sincronizarOffline(hijoId, registros);
+    await prefs.remove('offline_locations');
+    print('🔌 [BackgroundService] Sincronización offline completada con éxito.');
+  } catch (e) {
+    print('🔌 [BackgroundService] Error al intentar sincronizar offline: $e');
+  }
 }
 
 @pragma('vm:entry-point')
