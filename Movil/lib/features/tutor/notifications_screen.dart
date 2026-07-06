@@ -69,9 +69,11 @@ class _TutorNotificationsScreenState extends State<TutorNotificationsScreen> {
       await _notificationsService.markAllAsRead();
       await _cargarNotificaciones();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.colorDanger),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.colorDanger),
+        );
+      }
       setState(() => _isLoading = false);
     }
   }

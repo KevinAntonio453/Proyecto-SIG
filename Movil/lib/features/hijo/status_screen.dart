@@ -247,7 +247,7 @@ class _HijoStatusScreenState extends State<HijoStatusScreen> {
                 service.invoke('stopService');
               }
               await _authService.logout();
-              if (mounted) {
+              if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const WelcomeScreen()),
