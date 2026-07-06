@@ -33,7 +33,19 @@ class ApiClient {
   // Interceptor para verificar la validez del token en cada respuesta
   http.Response _checkResponse(http.Response response) {
     if (response.statusCode == 401) {
-      print('🔌 [ApiClient] Detectado error 401. Limpiando sesión local...');
+      final path = response.request?.url.path ?? '';
+      print('🔌 [ApiClient] Detectado error 401 en ruta: $path');
+
+      // No disparar el interceptor de deslogueo en endpoints de login/registro/vinculación
+      if (path.contains('/auth/login') ||
+          path.contains('/auth/login-codigo') ||
+          path.contains('/auth/register') ||
+          path.contains('/hijos/vincular') ||
+          path.contains('/hijos/verificar-codigo')) {
+        return response;
+      }
+
+      print('🔌 [ApiClient] Limpiando sesión local...');
       // 1. Limpiar almacenamiento local
       SharedPreferences.getInstance().then((prefs) {
         prefs.remove('access_token');
